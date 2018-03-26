@@ -54,7 +54,7 @@ class postgresql::globals (
   $timezone                 = undef,
 
   $certificate_common_name  = $::fqdn,
-  $certificate_days         = 3650
+  $certificate_days         = 3650,
 
   $manage_pg_hba_conf       = undef,
   $manage_pg_ident_conf     = undef,
