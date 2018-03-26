@@ -1,223 +1,916 @@
-postgresql
-==========
+# postgresql
 
-Table of Contents
------------------
+#### Table of Contents
 
-1. [Overview - What is the PostgreSQL module?](#overview)
-2. [Module Description - What does the module do?](#module-description)
-3. [Setup - The basics of getting started with PostgreSQL module](#setup)
-    * [PE 3.2 supported module](#pe-3.2-supported-module)
-    * [Configuring the server](#configuring-the-server) 
-4. [Usage - How to use the module for various tasks](#usage)
-5. [Upgrading - Guide for upgrading from older revisions of this module](#upgrading)
-6. [Reference - The classes, defines,functions and facts available in this module](#reference)
-7. [Limitations - OS compatibility, etc.](#limitations)
-8. [Development - Guide for contributing to the module](#development)
-9. [Disclaimer - Licensing information](#disclaimer)
-10. [Transfer Notice - Notice of authorship change](#transfer-notice)
-11. [Contributors - List of module contributors](#contributors)
+1. [Module Description - What does the module do?](#module-description)
+2. [Setup - The basics of getting started with postgresql module](#setup)
+    * [What postgresql affects](#what-postgresql-affects)
+    * [Getting started with postgresql](#getting-started-with-postgresql)
+3. [Usage - Configuration options and additional functionality](#usage)
+    * [Configure a server](#configure-a-server)
+    * [Create a database](#create-a-database)
+    * [Manage users, roles, and permissions](#manage-users-roles-and-permissions)
+    * [Manage ownership of DB objects](#manage-ownership-of-db-objects)
+    * [Override defaults](#override-defaults)
+    * [Create an access rule for pg_hba.conf](#create-an-access-rule-for-pg_hbaconf)
+    * [Create user name maps for pg_ident.conf](#create-user-name-maps-for-pg_identconf)
+    * [Validate connectivity](#validate-connectivity)
+4. [Reference - An under-the-hood peek at what the module is doing and how](#reference)
+    * [Classes](#classes)
+    * [Defined Types](#defined-types)
+    * [Types](#types)
+    * [Functions](#functions)
+    * [Tasks](#tasks)
+5. [Limitations - OS compatibility, etc.](#limitations)
+6. [Development - Guide for contributing to the module](#development)
+    * [Contributors - List of module contributors](#contributors)
+7. [Tests](#tests)
+8. [Contributors - List of module contributors](#contributors)
 
-Overview
---------
+## Module description
 
-The PostgreSQL module allows you to easily manage postgres databases with Puppet.
+The postgresql module allows you to manage PostgreSQL databases with Puppet.
 
-Module Description
--------------------
+PostgreSQL is a high-performance, free, open-source relational database server. The postgresql module allows you to manage packages, services, databases, users, and common security settings in PostgreSQL.
 
-PostgreSQL is a high-performance, free, open-source relational database server. The postgresql module allows you to manage PostgreSQL packages and services on several operating systems, while also supporting basic management of PostgreSQL databases and users. The module offers support for basic management of common security settings.
+## Setup
 
-Setup
------
+### What postgresql affects
 
-**What puppetlabs-PostgreSQL affects:**
-
-* package/service/configuration files for PostgreSQL
-* listened-to ports
+* Package, service, and configuration files for PostgreSQL
+* Listened-to ports
 * IP and mask (optional)
 
-**Introductory Questions**
+### Getting started with postgresql
 
-The postgresql module offers many security configuration settings. Before getting started, you will want to consider:
+To configure a basic default PostgreSQL server, declare the `postgresql::server` class.
 
-* Do you want/need to allow remote connections?
-    * If yes, what about TCP connections?
-* How restrictive do you want the database superuser's permissions to be?
+```puppet
+class { 'postgresql::server':
+}
+```
 
-Your answers to these questions will determine which of the module's parameters you'll want to specify values for.
+## Usage
 
-###PE 3.2 supported module
+### Configure a server
 
-PE 3.2 introduces Puppet Labs supported modules. The version of the postgresql module that ships within PE 3.2 is supported via normal [Puppet Enterprise support](http://puppetlabs.com/services/customer-support) channels. If you would like to access the [supported module](http://forge.puppetlabs.com/supported) version, you will need to uninstall the shipped module and install the supported version from the Puppet Forge. You can do this by first running
+For default settings, declare the `postgresql::server` class as above. To customize PostgreSQL server settings, specify the [parameters](#postgresqlserver) you want to change:
 
-    # puppet module uninstall puppetlabs-postgresql
-and then running
+```puppet
+class { 'postgresql::server':
+  ip_mask_deny_postgres_user => '0.0.0.0/32',
+  ip_mask_allow_all_users    => '0.0.0.0/0',
+  ipv4acls                   => ['hostssl all johndoe 192.168.0.0/24 cert'],
+  postgres_password          => 'TPSrep0rt!',
+}
+```
 
-    # puppet module install puppetlabs/postgresql
+After configuration, test your settings from the command line:
 
-###Configuring the server
+```shell
+psql -h localhost -U postgres
+psql -h my.postgres.server -U
+```
 
-The main configuration you'll need to do will be around the `postgresql::server` class. The default parameters are reasonable, but fairly restrictive regarding permissions for who can connect and from where. To manage a PostgreSQL server with sane defaults:
+If you get an error message from these commands, your permission settings restrict access from the location you're trying to connect from. Depending on whether you want to allow connections from that location, you might need to adjust your permissions.
 
-    class { 'postgresql::server': }
+For more details about server configuration parameters, consult the [PostgreSQL Runtime Configuration documentation](http://www.postgresql.org/docs/current/static/runtime-config.html).
 
-For a more customized configuration:
+### Create a database
 
-    class { 'postgresql::server':
-      ip_mask_deny_postgres_user => '0.0.0.0/32',
-      ip_mask_allow_all_users    => '0.0.0.0/0',
-      listen_addresses           => '*',
-      ipv4acls                   => ['hostssl all johndoe 192.168.0.0/24 cert'],
-      postgres_password          => 'TPSrep0rt!',
-    }
+You can set up a variety of PostgreSQL databases with the `postgresql::server::db` defined type. For instance, to set up a database for PuppetDB:
 
-Once you've completed your configuration of `postgresql::server`, you can test out your settings from the command line:
+```puppet
+class { 'postgresql::server':
+}
 
-    $ psql -h localhost -U postgres
-    $ psql -h my.postgres.server -U
+postgresql::server::db { 'mydatabasename':
+  user     => 'mydatabaseuser',
+  password => postgresql_password('mydatabaseuser', 'mypassword'),
+}
+```
 
-If you get an error message from these commands, it means that your permissions are set in a way that restricts access from where you're trying to connect. That might be a good thing or a bad thing, depending on your goals.
+### Manage users, roles, and permissions
 
-For more details about server configuration parameters consult the [PostgreSQL Runtime Configuration docs](http://www.postgresql.org/docs/9.2/static/runtime-config.html).
+To manage users, roles, and permissions:
 
-Usage
------
+```puppet
+class { 'postgresql::server':
+}
 
-###Creating a database
+postgresql::server::role { 'marmot':
+  password_hash => postgresql_password('marmot', 'mypasswd'),
+}
 
-There are many ways to set up a postgres database using the `postgresql::server::db` class. For instance, to set up a database for PuppetDB:
+postgresql::server::database_grant { 'test1':
+  privilege => 'ALL',
+  db        => 'test1',
+  role      => 'marmot',
+}
 
-    class { 'postgresql::server': }
+postgresql::server::table_grant { 'my_table of test2':
+  privilege => 'ALL',
+  table     => 'my_table',
+  db        => 'test2',
+  role      => 'marmot',
+}
+```
 
-    postgresql::server::db { 'mydatabasename':
-      user     => 'mydatabaseuser',
-      password => postgresql_password('mydatabaseuser', 'mypassword'),
-    }
+This example grants **all** privileges on the test1 database and on the `my_table` table of the test2 database to the specified user or group. After the values are added into the PuppetDB config file, this database would be ready for use.
 
-###Managing users, roles and permissions
+### Manage ownership of DB objects
 
-To manage users, roles and permissions:
+To change the ownership of all objects within a database using REASSIGN OWNED:
 
-    class { 'postgresql::server': }
+```puppet
+postgresql::server::reassign_owned_by { 'new owner is meerkat':
+  db       => 'test_db',
+  old_role => 'marmot',
+  new_role => 'meerkat',
+}
+```
 
-    postgresql::server::role { 'marmot':
-      password_hash => postgresql_password('marmot', 'mypasswd'),
-    }
+This would run the PostgreSQL statement 'REASSIGN OWNED' to update to ownership of all tables, sequences, functions and views currently owned by the role 'marmot' to be owned by the role 'meerkat' instead.
 
-    postgresql::server::database_grant { 'test1':
-      privilege => 'ALL',
-      db        => 'test1',
-      role      => 'marmot',
-    }
+This applies to objects within the nominated database, 'test_db' only.
 
-    postgresql::server::table_grant { 'my_table of test2':
-      privilege => 'ALL',
-      table     => 'my_table',
-      db        => 'test2',
-      role      => 'marmot',
-    }
+For Postgresql >= 9.3, the ownership of the database is also updated.
 
-In this example, you would grant ALL privileges on the test1 database and on the `my_table` table of the test2 database to the user or group specified by dan.
+### Override defaults
 
-At this point, you would just need to plunk these database name/username/password values into your PuppetDB config files, and you are good to go.
+The `postgresql::globals` class allows you to configure the main settings for this module globally, so that other classes and defined resources can use them. By itself, it does nothing.
 
-Upgrading
----------
+For example, to overwrite the default `locale` and `encoding` for all classes, use the following:
 
-###Upgrading from 2.x to version 3
+```puppet
+class { 'postgresql::globals':
+  encoding => 'UTF-8',
+  locale   => 'en_US.UTF-8',
+}
+
+class { 'postgresql::server':
+}
+```
+
+To use a specific version of the PostgreSQL package:
+
+```puppet
+class { 'postgresql::globals':
+  manage_package_repo => true,
+  version             => '9.2',
+}
+
+class { 'postgresql::server':
+}
+```
+
+### Manage remote users, roles, and permissions
+
+Remote SQL objects are managed using the same Puppet resources as local SQL objects, along with a [`connect_settings`](#connect_settings) hash. This provides control over how Puppet connects to the remote Postgres instances and which version is used for generating SQL commands.
+
+The `connect_settings` hash can contain environment variables to control Postgres client connections, such as 'PGHOST', 'PGPORT', 'PGPASSWORD', and 'PGSSLKEY'. See the [PostgreSQL Environment Variables](http://www.postgresql.org/docs/9.4/static/libpq-envars.html)  documentation for a complete list of variables.
+
+Additionally, you can specify the target database version with the special value of 'DBVERSION'. If the `connect_settings` hash is omitted or empty, then Puppet connects to the local PostgreSQL instance.
+
+You can provide a `connect_settings` hash for each of the Puppet resources, or you can set a default `connect_settings` hash in `postgresql::globals`. Configuring `connect_settings` per resource allows SQL objects to be created on multiple databases by multiple users.
+
+```puppet
+$connection_settings_super2 = {
+  'PGUSER'     => 'super2',
+  'PGPASSWORD' => 'foobar2',
+  'PGHOST'     => '127.0.0.1',
+  'PGPORT'     => '5432',
+  'PGDATABASE' => 'postgres',
+}
+
+include postgresql::server
+
+# Connect with no special settings, i.e domain sockets, user postgres
+postgresql::server::role { 'super2':
+  password_hash    => 'foobar2',
+  superuser        => true,
+
+  connect_settings => {},
+}
+
+# Now using this new user connect via TCP
+postgresql::server::database { 'db1':
+  connect_settings => $connection_settings_super2,
+  require          => Postgresql::Server::Role['super2'],
+}
+```
+
+### Create an access rule for pg_hba.conf
+
+To create an access rule for `pg_hba.conf`:
+
+```puppet
+postgresql::server::pg_hba_rule { 'allow application network to access app database':
+  description => 'Open up PostgreSQL for access from 200.1.2.0/24',
+  type        => 'host',
+  database    => 'app',
+  user        => 'app',
+  address     => '200.1.2.0/24',
+  auth_method => 'md5',
+}
+```
+
+This would create a ruleset in `pg_hba.conf` similar to:
+
+```
+# Rule Name: allow application network to access app database
+# Description: Open up PostgreSQL for access from 200.1.2.0/24
+# Order: 150
+host  app  app  200.1.2.0/24  md5
+```
+
+By default, `pg_hba_rule` requires that you include `postgresql::server`. However, you can override that behavior by setting target and postgresql_version when declaring your rule.  That might look like the following:
+
+```puppet
+postgresql::server::pg_hba_rule { 'allow application network to access app database':
+  description        => 'Open up postgresql for access from 200.1.2.0/24',
+  type               => 'host',
+  database           => 'app',
+  user               => 'app',
+  address            => '200.1.2.0/24',
+  auth_method        => 'md5',
+  target             => '/path/to/pg_hba.conf',
+  postgresql_version => '9.4',
+}
+```
+
+### Create user name maps for pg_ident.conf
+
+To create a user name map for the pg_ident.conf:
+
+```puppet
+postgresql::server::pg_ident_rule { 'Map the SSL certificate of the backup server as a replication user':
+  map_name          => 'sslrepli',
+  system_username   => 'repli1.example.com',
+  database_username => 'replication',
+}
+```
+
+This would create a user name map in `pg_ident.conf` similar to:
+
+```
+#Rule Name: Map the SSL certificate of the backup server as a replication user
+#Description: none
+#Order: 150
+sslrepli  repli1.example.com  replication
+```
+
+### Create recovery configuration
+
+To create the recovery configuration file (`recovery.conf`):
+
+```puppet
+postgresql::server::recovery { 'Create a recovery.conf file with the following defined parameters':
+  restore_command           => 'cp /mnt/server/archivedir/%f %p',
+  archive_cleanup_command   => undef,
+  recovery_end_command      => undef,
+  recovery_target_name      => 'daily backup 2015-01-26',
+  recovery_target_time      => '2015-02-08 22:39:00 EST',
+  recovery_target_xid       => undef,
+  recovery_target_inclusive => true,
+  recovery_target           => 'immediate',
+  recovery_target_timeline  => 'latest',
+  pause_at_recovery_target  => true,
+  standby_mode              => 'on',
+  primary_conninfo          => 'host=localhost port=5432',
+  primary_slot_name         => undef,
+  trigger_file              => undef,
+  recovery_min_apply_delay  => 0,
+}
+```
+
+The above creates this `recovery.conf` config file:
+
+```
+restore_command = 'cp /mnt/server/archivedir/%f %p'
+recovery_target_name = 'daily backup 2015-01-26'
+recovery_target_time = '2015-02-08 22:39:00 EST'
+recovery_target_inclusive = true
+recovery_target = 'immediate'
+recovery_target_timeline = 'latest'
+pause_at_recovery_target = true
+standby_mode = 'on'
+primary_conninfo = 'host=localhost port=5432'
+recovery_min_apply_delay = 0
+```
+
+Only the specified parameters are recognized in the template. The `recovery.conf` is only be created if at least one parameter is set **and** [manage_recovery_conf](#manage_recovery_conf) is set to true.
 
-*Note:* if you are upgrading for 2.x, you *must* read this, as just about everything has changed.
+### Validate connectivity
 
-Version 3 was a major rewrite to fix some internal dependency issues, and to make the new Public API more clear. As a consequence a lot of things have changed for version 3 and older revisions that we will try to outline here.
+To validate client connections to a remote PostgreSQL database before starting dependent tasks, use the `postgresql_conn_validator` resource. You can use this on any node where the PostgreSQL client software is installed. It is often chained to other tasks such as starting an application server or performing a database migration.
 
-####Server specific objects now moved under `postgresql::server::` namespace
+Example usage:
 
-To restructure server specific elements under the `postgresql::server::` namespaces the following objects were renamed as such:
+```puppet
+postgresql_conn_validator { 'validate my postgres connection':
+  host              => 'my.postgres.host',
+  db_username       => 'mydbuser',
+  db_password       => 'mydbpassword',
+  db_name           => 'mydbname',
+}->
+exec { 'rake db:migrate':
+  cwd => '/opt/myrubyapp',
+}
+```
 
-* `postgresql::database`       -> `postgresql::server::database`
-* `postgresql::database_grant` -> `postgresql::server::database_grant`
-* `postgresql::db`             -> `postgresql::server::db`
-* `postgresql::grant`          -> `postgresql::server::grant`
-* `postgresql::pg_hba_rule`    -> `postgresql::server::pg_hba_rule`
-* `postgresql::plperl`         -> `postgresql::server::plperl`
-* `postgresql::contrib`        -> `postgresql::server::contrib`
-* `postgresql::role`           -> `postgresql::server::role`
-* `postgresql::table_grant`    -> `postgresql::server::table_grant`
-* `postgresql::tablespace`     -> `postgresql::server::tablespace`
+## Reference
 
-####New `postgresql::server::config_entry` resource for managing configuration
+The postgresql module comes with many options for configuring the server. While you are unlikely to use all of the settings below, they provide a decent amount of control over your security settings.
 
-Previously we used the `file_line` resource to modify `postgresql.conf`. This new revision now adds a new resource named `postgresql::server::config_entry` for managing this file. For example:
+**Classes:**
 
-    postgresql::server::config_entry { 'check_function_bodies':
-      value => 'off',
-    }
+* [postgresql::client](#postgresqlclient)
+* [postgresql::globals](#postgresqlglobals)
+* [postgresql::lib::devel](#postgresqllibdevel)
+* [postgresql::lib::java](#postgresqllibjava)
+* [postgresql::lib::perl](#postgresqllibperl)
+* [postgresql::lib::python](#postgresqllibpython)
+* [postgresql::server](#postgresqlserver)
+* [postgresql::server::plperl](#postgresqlserverplperl)
+* [postgresql::server::contrib](#postgresqlservercontrib)
+* [postgresql::server::postgis](#postgresqlserverpostgis)
 
-If you were using `file_line` for this purpose, you should change to this new methodology.
+**Defined Types:**
 
-####`postgresql_puppet_extras.conf` has been removed
+* [postgresql::server::config_entry](#postgresqlserverconfig_entry)
+* [postgresql::server::database](#postgresqlserverdatabase)
+* [postgresql::server::database_grant](#postgresqlserverdatabase_grant)
+* [postgresql::server::db](#postgresqlserverdb)
+* [postgresql::server::extension](#postgresqlserverextension)
+* [postgresql::server::grant](#postgresqlservergrant)
+* [postgresql::server::grant_role](#postgresqlservergrant_role)
+* [postgresql::server::pg_hba_rule](#postgresqlserverpg_hba_rule)
+* [postgresql::server::pg_ident_rule](#postgresqlserverpg_ident_rule)
+* [postgresql::server::reassign_owned_by](#postgresqlserverreassign_owned_by)
+* [postgresql::server::recovery](#postgresqlserverrecovery)
+* [postgresql::server::role](#postgresqlserverrole)
+* [postgresql::server::schema](#postgresqlserverschema)
+* [postgresql::server::table_grant](#postgresqlservertable_grant)
+* [postgresql::server::tablespace](#postgresqlservertablespace)
 
-Now that we have a methodology for managing `postgresql.conf`, and due to concerns over the file management methodology using an `exec { 'touch ...': }` as a way to create an empty file the existing postgresql\_puppet\_extras.conf file is no longer managed by this module.
+**Types:**
 
-If you wish to recreate this methodology yourself, use this pattern:
+* [postgresql_psql](#custom-resource-postgresql_psql)
+* [postgresql_replication_slot](#custom-resource-postgresql_replication_slot)
+* [postgresql_conf](#custom-resource-postgresql_conf)
+* [postgresql_conn_validator](#custom-resource-postgresql_conn_validator)
 
-    class { 'postgresql::server': }
+**Functions:**
 
-    $extras = "/tmp/include.conf"
+* [postgresql_password](#function-postgresql_password)
+* [postgresql_acls_to_resources_hash](#function-postgresql_acls_to_resources_hashacl_array-id-order_offset)
 
-    file { $extras:
-      content => 'max_connections = 123',
-      notify  => Class['postgresql::server::service'],
-    }->
-    postgresql::server::config_entry { 'include':
-      value   => $extras,
-    }
+**Tasks:**
 
-####All uses of the parameter `charset` changed to `encoding`
+* [`sql`](#tasks)
 
-Since PostgreSQL uses the terminology `encoding` not `charset` the parameter has been made consisent across all classes and resources.
+### Classes
 
-####The `postgresql` base class is no longer how you set globals
+#### postgresql::client
 
-The old global override pattern was less then optimal so it has been fixed, however we decided to demark this properly by specifying these overrides in the class `postgresql::globals`. Consult the documentation for this class now to see what options are available.
+Installs PostgreSQL client software. Set the following parameters if you have a custom version you would like to install.
 
-Also, some parameter elements have been moved between this and the `postgresql::server` class where it made sense.
+>**Note:** Make sure to add any necessary yum or apt repositories if specifying a custom version.
 
-####`config_hash` parameter collapsed for the `postgresql::server` class
+##### `package_ensure`
 
-Because the `config_hash` was really passing data through to what was in effect an internal class (`postgresql::config`). And since we don't want this kind of internal exposure the parameters were collapsed up into the `postgresql::server` class directly.
+Whether the PostgreSQL client package resource should be present.
 
-####Lots of changes to 'private' or 'undocumented' classes
+Valid values: 'present', 'absent'.
 
-If you were using these before, these have changed names. You should only use what is documented in this README.md, and if you don't have what you need you should raise a patch to add that feature to a public API. All internal classes now have a comment at the top indicating them as private to make sure the message is clear that they are not supported as Public API.
+Default value: 'present'.
 
-####`pg_hba_conf_defaults` parameter included to turn off default pg\_hba rules
+##### `package_name`
 
-The defaults should be good enough for most cases (if not raise a bug) but if you simply need an escape hatch, this setting will turn off the defaults. If you want to do this, it may affect the rest of the module so make sure you replace the rules with something that continues operation.
+Sets the name of the PostgreSQL client package.
 
-####`postgresql::database_user` has now been removed
+Default value: 'file'.
 
-Use `postgresql::server::role` instead.
+#### postgresql::lib::docs
 
-####`postgresql::psql` resource has now been removed
+Installs PostgreSQL bindings for Postgres-Docs. Set the following parameters if you have a custom version you would like to install.
 
-Use `postgresql_psql` instead. In the future we may recreate this as a wrapper to add extra capability, but it will not match the old behaviour.
+**Note:** Make sure to add any necessary yum or apt repositories if specifying a custom version.
 
-####`postgresql_default_version` fact has now been removed
+##### `package_name`
 
-It didn't make sense to have this logic in a fact any more, the logic has been moved into `postgresql::params`.
+Specifies the name of the PostgreSQL docs package.
 
-####`ripienaar/concat` is no longer used, instead we use `puppetlabs/concat`
+##### `package_ensure`
 
-The older concat module is now deprecated and moved into the `puppetlabs/concat` namespace. Functionality is more or less identical, but you may need to intervene during the installing of this package - as both use the same `concat` namespace.
+Whether the PostgreSQL docs package resource should be present.
 
-Reference
----------
+Valid values: 'present', 'absent'.
 
-The postgresql module comes with many options for configuring the server. While you are unlikely to use all of the below settings, they allow you a decent amount of control over your security settings.
+Default value: 'present'.
 
-Classes:
+#### postgresql::globals
+
+**Note:** Most server-specific defaults should be overridden in the `postgresql::server` class. This class should be used only if you are using a non-standard OS, or if you are changing elements that can only be changed here, such as `version` or `manage_package_repo`.
+
+##### `bindir`
+
+Overrides the default PostgreSQL binaries directory for the target platform.
+
+Default value: OS dependent.
+
+##### `client_package_name`
+
+Overrides the default PostgreSQL client package name.
+
+Default value: OS dependent.
+
+##### `confdir`
+
+Overrides the default PostgreSQL configuration directory for the target platform.
+
+Default value: OS dependent.
+
+##### `contrib_package_name`
+
+Overrides the default PostgreSQL contrib package name.
+
+Default value: OS dependent.
+
+##### `createdb_path`
+
+**Deprecated.** Path to the `createdb` command.
+
+Default value: '${bindir}/createdb'.
+
+##### `datadir`
+
+Overrides the default PostgreSQL data directory for the target platform.
+
+Default value: OS dependent.
+
+**Note:** Changing the datadir after installation causes the server to come to a full stop before making the change. For Red Hat systems, the data directory must be labeled appropriately for SELinux. On Ubuntu, you must explicitly set `needs_initdb = true` to allow Puppet to initialize the database in the new datadir (`needs_initdb` defaults to true on other systems).
+
+**Warning:** If datadir is changed from the default, Puppet does not manage purging of the original data directory, which causes it to fail if the data directory is changed back to the original.
+
+##### `data_checksums`
+
+Optional.
+
+Data type: Boolean.
+
+Use checksums on data pages to help detect corruption by the I/O system that would otherwise be silent.
+
+Valid values: `true` or `false`.
+
+Default: initdb's default (`false`).
+
+**Warning:** This option is used during initialization by initdb, and cannot be changed later. If set, checksums are calculated for all objects, in all databases.
+
+##### `default_database`
+
+Specifies the name of the default database to connect with.
+
+Default value: 'postgres' (for most systems).
+
+##### `devel_package_name`
+
+Overrides the default PostgreSQL devel package name.
+
+Default value: OS dependent.
+
+##### `docs_package_name`
+
+Optional.
+
+Overrides the default PostgreSQL docs package name.
+
+Default value: OS dependent.
+
+##### `encoding`
+
+Sets the default encoding for all databases created with this module. On certain operating systems, this is also used during the `template1` initialization, so it becomes a default outside of the module as well.
+
+Default value: Dependent on the operating system's default encoding.
+
+##### `group`
+
+Overrides the default postgres user group to be used for related files in the file system.
+
+Default value: 'postgres'.
+
+##### `initdb_path`
+
+Path to the `initdb` command.
+
+##### `java_package_name`
+
+Overrides the default PostgreSQL java package name.
+
+Default value: OS dependent.
+
+##### `locale`
+
+Sets the default database locale for all databases created with this module. On certain operating systems, this is also used during the `template1` initialization, so it becomes a default outside of the module as well.
+
+Default value: `undef`, which is effectively 'C'.
+
+**On Debian, you'll need to ensure that the 'locales-all' package is installed for full functionality of PostgreSQL.**
+
+##### `timezone`
+
+Sets the default timezone of the postgresql server. The postgresql built-in default is taking the systems timezone information.
+
+##### `logdir`
+
+Overrides the default PostgreSQL log directory.
+
+Default value: initdb's default path.
+
+##### `manage_package_repo`
+
+Sets up official PostgreSQL repositories on your host if set to `true`.
+
+Default value: `false`.
+
+##### `module_workdir`
+
+Specifies working directory under which the psql command should be executed. May need to specify if '/tmp' is on volume mounted with noexec option.
+
+Default value: '/tmp'.
+
+##### `needs_initdb`
+
+Explicitly calls the initdb operation after the server package is installed and before the PostgreSQL service is started.
+
+Default value: OS dependent.
+
+##### `perl_package_name`
+
+Overrides the default PostgreSQL Perl package name.
+
+Default value: OS dependent.
+
+##### `pg_hba_conf_defaults`
+
+Disables the defaults supplied with the module for `pg_hba.conf` if set to `false`. This is useful if you want to override the defaults. Be sure that your changes align with the rest of the module, as some access is required to perform some operations, such as basic `psql` operations.
+
+Default value: The globals value set in `postgresql::globals::manage_pg_hba_conf` which defaults to `true`.
+
+##### `pg_hba_conf_path`
+
+Specifies the path to your `pg_hba.conf` file.
+
+Default value: '${confdir}/pg_hba.conf'.
+
+##### `pg_ident_conf_path`
+
+Specifies the path to your `pg_ident.conf` file.
+
+Default value: '${confdir}/pg_ident.conf'.
+
+##### `plperl_package_name`
+
+Overrides the default PostgreSQL PL/Perl package name.
+
+Default value: OS dependent.
+
+##### `plpython_package_name`
+
+Overrides the default PostgreSQL PL/Python package name.
+
+Default value: OS dependent.
+
+##### `postgis_version`
+
+Defines the version of PostGIS to install, if you install PostGIS.
+
+Default value: The lowest available with the version of PostgreSQL to be installed.
+
+##### `postgresql_conf_path`
+
+Sets the path to your `postgresql.conf` file.
+
+Default value: '${confdir}/postgresql.conf'.
+
+##### `psql_path`
+
+Sets the path to the `psql` command.
+
+##### `python_package_name`
+
+Overrides the default PostgreSQL Python package name.
+
+Default value: OS dependent.
+
+##### `recovery_conf_path`
+
+Path to your `recovery.conf` file.
+
+##### `repo_proxy`
+
+Sets the proxy option for the official PostgreSQL yum-repositories only. This is useful if your server is behind a corporate firewall and needs to use proxy servers for outside connectivity.
+
+Debian is currently not supported.
+
+##### `repo_baseurl`
+
+Sets the baseurl for the PostgreSQL repository. Useful if you host your own mirror of the repository.
+
+Default value: The official PostgreSQL repository.
+
+##### `server_package_name`
+
+Overrides the default PostgreSQL server package name.
+
+Default value: OS dependent.
+
+##### `service_name`
+
+Overrides the default PostgreSQL service name.
+
+Default value: OS dependent.
+
+##### `service_provider`
+
+Overrides the default PostgreSQL service provider.
+
+Default value: OS dependent.
+
+##### `service_status`
+
+Overrides the default status check command for your PostgreSQL service.
+
+Default value: OS dependent.
+
+##### `user`
+
+Overrides the default PostgreSQL super user and owner of PostgreSQL related files in the file system.
+
+Default value: 'postgres'.
+
+##### `version`
+
+The version of PostgreSQL to install and manage.
+
+Default value: OS system default.
+
+##### `xlogdir`
+
+Overrides the default PostgreSQL xlog directory.
+
+Default value: initdb's default path.
+
+#### postgresql::lib::devel
+
+Installs the packages containing the development libraries for PostgreSQL and symlinks `pg_config` into `/usr/bin` (if not in `/usr/bin` or `/usr/local/bin`).
+
+##### `link_pg_config`
+
+If the bin directory used by the PostgreSQL page is not  `/usr/bin` or `/usr/local/bin`, symlinks `pg_config` from the package's bin dir into `usr/bin` (not applicable to Debian systems). Set to `false` to disable this behavior.
+
+Valid values: `true`, `false`.
+
+Default value: `true`.
+
+##### `package_ensure`
+
+Overrides the 'ensure' parameter during package installation.
+
+Default value: 'present'.
+
+##### `package_name`
+
+Overrides the default package name for the distribution you are installing to.
+
+Default value: 'postgresql-devel' or 'postgresql<version>-devel' depending on your distro.
+
+#### postgresql::lib::java
+
+Installs PostgreSQL bindings for Java (JDBC). Set the following parameters if you have a custom version you would like to install.
+
+**Note:** Make sure to add any necessary yum or apt repositories if specifying a custom version.
+
+##### `package_ensure`
+
+Specifies whether the package is present.
+
+Valid values: 'present', 'absent'.
+
+Default value: 'present'.
+
+##### `package_name`
+
+Specifies the name of the PostgreSQL java package.
+
+#### postgresql::lib::perl
+
+Installs the PostgreSQL Perl libraries.
+
+##### `package_ensure`
+
+Specifies whether the package is present.
+
+Valid values: 'present', 'absent'.
+
+Default value: 'present'.
+
+##### `package_name`
+
+Specifies the name of the PostgreSQL perl package to install.
+
+#### postgresql::server::plpython
+
+Installs the PL/Python procedural language for PostgreSQL.
+
+##### `package_name`
+
+Specifies the name of the postgresql PL/Python package.
+
+##### `package_ensure`
+
+Specifies whether the package is present.
+
+Valid values: 'present', 'absent'.
+
+Default value: 'present'.
+
+#### postgresql::lib::python
+
+Installs PostgreSQL Python libraries.
+
+##### `package_ensure`
+
+Specifies whether the package is present.
+
+Valid values: 'present', 'absent'.
+
+Default value: 'present'.
+
+##### `package_name`
+
+The name of the PostgreSQL Python package.
+
+#### postgresql::server
+
+##### `createdb_path`
+
+**Deprecated.** Specifies the path to the `createdb` command.
+
+Default value: '${bindir}/createdb'.
+
+##### `data_checksums`
+
+Optional.
+
+Data type: Boolean.
+
+Use checksums on data pages to help detect corruption by the I/O system that would otherwise be silent.
+
+Valid values: `true` or `false`.
+
+Default value: initdb's default (`false`).
+
+**Warning:** This option is used during initialization by initdb, and cannot be changed later. If set, checksums are calculated for all objects, in all databases.
+
+##### `default_database`
+
+Specifies the name of the default database to connect with. On most systems this is 'postgres'.
+
+##### `default_connect_settings`
+
+Specifies a hash of environment variables used when connecting to a remote server. Becomes the default for other defined types, such as `postgresql::server::role`.
+
+##### `encoding`
+
+Sets the default encoding for all databases created with this module. On certain operating systems this is also used during the `template1` initialization, so it becomes a default outside of the module as well.
+
+Default value: `undef`.
+
+##### `group`
+
+Overrides the default postgres user group to be used for related files in the file system.
+
+Default value: OS dependent default.
+
+##### `initdb_path`
+
+Specifies the path to the `initdb` command.
+
+Default value: '${bindir}/initdb'.
+
+##### `ipv4acls`
+
+Lists strings for access control for connection method, users, databases, IPv4 addresses;
+
+see [PostgreSQL documentation](http://www.postgresql.org/docs/current/static/auth-pg-hba-conf.html) on `pg_hba.conf` for information.
+
+##### `ipv6acls`
+
+Lists strings for access control for connection method, users, databases, IPv6 addresses.
+
+see [PostgreSQL documentation](http://www.postgresql.org/docs/current/static/auth-pg-hba-conf.html) on `pg_hba.conf` for information.
+
+##### `ip_mask_allow_all_users`
+
+Overrides PostgreSQL defaults for remote connections. By default, PostgreSQL does not allow database user accounts to connect via TCP from remote machines. If you'd like to allow this, you can override this setting.
+
+Set to '0.0.0.0/0' to allow database users to connect from any remote machine, or '192.168.0.0/1' to allow connections from any machine on your local '192.168' subnet.
+
+Default value: '127.0.0.1/32'.
+
+##### `ip_mask_deny_postgres_user`
+
+Specifies the IP mask from which remote connections should be denied for the postgres superuser.
+
+Default value: '0.0.0.0/0', which denies any remote connection.
+
+##### `locale`
+
+Sets the default database locale for all databases created with this module. On certain operating systems this is used during the `template1` initialization as well, so it becomes a default outside of the module.
+
+Default value: `undef`, which is effectively 'C'.
+
+**On Debian, you must ensure that the 'locales-all' package is installed for full functionality of PostgreSQL.**
+
+##### `manage_pg_hba_conf`
+
+Whether to manage the `pg_hba.conf`.
+
+If set to `true`, Puppet overwrites this file.
+
+If set to `false`, Puppet does not modify the file.
+
+Valid values: `true`, `false`.
+
+Default value: `true`
+
+##### `manage_pg_ident_conf`
+
+Overwrites the pg_ident.conf file.
+
+If set to `true`, Puppet overwrites the file.
+
+If set to `false`, Puppet does not modify the file.
+
+Valid values: `true`, `false`.
+
+Default value: `true`.
+
+##### `manage_recovery_conf`
+
+Specifies whether or not manage the `recovery.conf`.
+
+If set to `true`, Puppet overwrites this file.
+
+Valid values: `true`, `false`.
+
+Default value: `false`.
+
+##### `needs_initdb`
+
+Explicitly calls the `initdb` operation after server package is installed, and before the PostgreSQL service is started.
+
+Default value: OS dependent.
+
+##### `package_ensure`
+
+Passes a value through to the `package` resource when creating the server instance.
+
+Default value: `undef`.
+
+##### `package_name`
+
+Specifies the name of the package to use for installing the server software.
+
+Default value: OS dependent.
+
+##### `pg_hba_conf_defaults`
+
+If `false`, disables the defaults supplied with the module for `pg_hba.conf`. This is useful if you disagree with the defaults and wish to override them yourself. Be sure that your changes of course align with the rest of the module, as some access is required to perform basic `psql` operations for example.
+
+##### `pg_hba_conf_path`
+
+Specifies the path to your `pg_hba.conf` file.
+
+##### `pg_ident_conf_path`
+
+Specifies the path to your `pg_ident.conf` file.
+
+Default value: '${confdir}/pg_ident.conf'.
+
+##### `plperl_package_name`
+
+Sets the default package name for the PL/Perl extension.
+
+Default value: OS dependent.
+
+##### `plpython_package_name`
+
+Sets the default package name for the PL/Python extension.
+
+Default value: OS dependent.
 
 * [postgresql::client](#class-postgresqlclient)
 * [postgresql::globals](#class-postgresqlglobals)
@@ -231,265 +924,185 @@ Classes:
 * [postgresql::server::ssl_certificate](#class-postgresqlserversslcertificate)
 * [postgresql::server::postgis](#class-postgresqlserverpostgis)
 
-Resources:
+##### `port`
 
-* [postgresql::server::config_entry](#resource-postgresqlserverconfig_entry)
-* [postgresql::server::db](#resource-postgresqlserverdb)
-* [postgresql::server::database](#resource-postgresqlserverdatabase)
-* [postgresql::server::database_grant](#resource-postgresqlserverdatabase_grant)
-* [postgresql::server::pg_hba_rule](#resource-postgresqlserverpg_hba_rule)
-* [postgresql::server::pg_ident_rule](#resource-postgresqlserver_pg_identrule)
-* [postgresql::server::role](#resource-postgresqlserverrole)
-* [postgresql::server::schema](#resource-postgresqlserverschema)
-* [postgresql::server::table_grant](#resource-postgresqlservertable_grant)
-* [postgresql::server::tablespace](#resource-postgresqlservertablespace)
-* [postgresql::validate_db_connection](#resource-postgresqlvalidate_db_connection)
+Specifies the port for the PostgreSQL server to listen on. **Note:** The same port number is used for all IP addresses the server listens on. Also, for Red Hat systems and early Debian systems, changing the port causes the server to come to a full stop before being able to make the change.
 
-Functions:
+Default value: 5432. Meaning the Postgres server listens on TCP port 5432.
 
-* [postgresql\_password](#function-postgresql_password)
-* [postgresql\_acls\_to\_resources\_hash](#function-postgresql_acls_to_resources_hashacl_array-id-order_offset)
+##### `postgres_password`
 
+Sets the password for the postgres user to your specified value. By default, this setting uses the superuser account in the Postgres database, with a user called `postgres` and no password.
 
-###Class: postgresql::globals
-*Note:* most server specific defaults should be overriden in the `postgresql::server` class. This class should only be used if you are using a non-standard OS or if you are changing elements such as `version` or `manage_package_repo` that can only be changed here.
+Default value: `undef`.
 
-This class allows you to configure the main settings for this module in a global way, to be used by the other classes and defined resources. On its own it does nothing.
+##### `postgresql_conf_path`
 
-For example, if you wanted to overwrite the default `locale` and `encoding` for all classes you could use the following combination:
+Specifies the path to your `postgresql.conf` file.
 
-    class { 'postgresql::globals':
-      encoding => 'UTF8',
-      locale   => 'en_NG',
-    }->
-    class { 'postgresql::server':
-    }
+Default value: '${confdir}/postgresql.conf'.
 
-That would make the `encoding` and `locale` the default for all classes and defined resources in this module.
+##### `psql_path`
 
-If you want to use the upstream PostgreSQL packaging, and be specific about the version you wish to download, you could use something like this:
+Specifies the path to the `psql` command.
 
-    class { 'postgresql::globals':
-      manage_package_repo => true,
-      version             => '9.2',
-    }->
-    class { 'postgresql::server': }
+Default value: OS dependent.
 
-####`client_package_name`
-This setting can be used to override the default postgresql client package name. If not specified, the module will use whatever package name is the default for your OS distro.
+##### `service_manage`
 
-####`server_package_name`
-This setting can be used to override the default postgresql server package name. If not specified, the module will use whatever package name is the default for your OS distro.
+Defines whether or not Puppet should manage the service.
 
-####`contrib_package_name`
-This setting can be used to override the default postgresql contrib package name. If not specified, the module will use whatever package name is the default for your OS distro.
+Default value: `true`.
 
-####`devel_package_name`
-This setting can be used to override the default postgresql devel package name. If not specified, the module will use whatever package name is the default for your OS distro.
+##### `service_name`
 
-####`java_package_name`
-This setting can be used to override the default postgresql java package name. If not specified, the module will use whatever package name is the default for your OS distro.
+Overrides the default PostgreSQL service name.
 
-####`perl_package_name`
-This setting can be used to override the default postgresql Perl package name. If not specified, the module will use whatever package name is the default for your OS distro.
+Default value: OS dependent.
 
-####`plperl_package_name`
-This setting can be used to override the default postgresql PL/perl package name. If not specified, the module will use whatever package name is the default for your OS distro.
+##### `service_provider`
 
-####`python_package_name`
-This setting can be used to override the default postgresql Python package name. If not specified, the module will use whatever package name is the default for your OS distro.
+Overrides the default PostgreSQL service provider.
 
-####`service_ensure`
-This setting can be used to override the default postgresql service ensure status. If not specified, the module will use `ensure` instead.
+Default value: `undef`.
 
-####`service_name`
-This setting can be used to override the default postgresql service name. If not specified, the module will use whatever service name is the default for your OS distro.
+##### `service_reload`
 
-####`service_provider`
-This setting can be used to override the default postgresql service provider. If not specified, the module will use whatever service provider is the default for your OS distro.
+Overrides the default reload command for your PostgreSQL service.
 
-####`service_status`
-This setting can be used to override the default status check command for your PostgreSQL service. If not specified, the module will use whatever service status is the default for your OS distro.
+Default value: OS dependent.
 
-####`default_database`
-This setting is used to specify the name of the default database to connect with. On most systems this will be "postgres".
+##### `service_restart_on_change`
 
-####`initdb_path`
-Path to the `initdb` command.
+Overrides the default behavior to restart your PostgreSQL service when a config entry has been changed that requires a service restart to become active.
 
-####`createdb_path`
-Path to the `createdb` command.
+Default value: `true`.
 
-####`psql_path`
-Path to the `psql` command.
+##### `service_status`
 
-####`pg_hba_conf_path`
-Path to your `pg\_hba.conf` file.
+Overrides the default status check command for your PostgreSQL service.
 
-####`pg_ident_conf_path`
-Path to your `pg\_ident.conf` file.
+Default value: OS dependent.
 
-####`postgresql_conf_path`
-Path to your `postgresql.conf` file.
+##### `user`
 
-####`pg_hba_conf_defaults`
-If false, disables the defaults supplied with the module for `pg\_hba.conf`. This is useful if you disagree with the defaults and wish to override them yourself. Be sure that your changes of course align with the rest of the module, as some access is required to perform basic `psql` operations for example.
+Overrides the default PostgreSQL super user and owner of PostgreSQL related files in the file system.
 
-####`datadir`
-This setting can be used to override the default postgresql data directory for the target platform. If not specified, the module will use whatever directory is the default for your OS distro.
+Default value: 'postgres'.
 
-####`confdir`
-This setting can be used to override the default postgresql configuration directory for the target platform. If not specified, the module will use whatever directory is the default for your OS distro.
+#### postgresql::server::contrib
 
-####`bindir`
-This setting can be used to override the default postgresql binaries directory for the target platform. If not specified, the module will use whatever directory is the default for your OS distro.
+Installs the PostgreSQL contrib package.
 
-####`xlogdir`
-This setting can be used to override the default postgresql xlog directory. If not specified the module will use initdb's default path.
+##### `package_ensure`
 
-####`user`
-This setting can be used to override the default postgresql super user and owner of postgresql related files in the file system. If not specified, the module will use the user name 'postgres'.
+Sets the ensure parameter passed on to PostgreSQL contrib package resource.
 
-####`group`
-This setting can be used to override the default postgresql user group to be used for related files in the file system. If not specified, the module will use the group name 'postgres'.
+##### `package_name`
 
-####`version`
-The version of PostgreSQL to install/manage. This is a simple way of providing a specific version such as '9.2' or '8.4' for example.
+The name of the PostgreSQL contrib package.
 
-Defaults to your operating system default.
+#### postgresql::server::plperl
 
-####`postgis_version`
-The version of PostGIS to install if you install PostGIS. Defaults to the lowest available with the version of PostgreSQL to be installed.
+Installs the PL/Perl procedural language for postgresql.
 
-####`needs_initdb`
-This setting can be used to explicitly call the initdb operation after server package is installed and before the postgresql service is started. If not specified, the module will decide whether to call initdb or not depending on your OS distro.
+##### `package_ensure`
 
-####`encoding`
-This will set the default encoding encoding for all databases created with this module. On certain operating systems this will be used during the `template1` initialization as well so it becomes a default outside of the module as well. Defaults to the operating system default.
+The ensure parameter passed on to PostgreSQL PL/Perl package resource.
 
-####`locale`
-This will set the default database locale for all databases created with this module. On certain operating systems this will be used during the `template1` initialization as well so it becomes a default outside of the module as well. Defaults to `undef` which is effectively `C`.
+##### `package_name`
 
-#####Debian
+The name of the PostgreSQL PL/Perl package.
 
-On Debian you'll need to ensure that the 'locales-all' package is installed for full functionality of Postgres.
+#### postgresql::server::postgis
 
-####`manage_package_repo`
-If `true` this will setup the official PostgreSQL repositories on your host. Defaults to `false`.
+Installs the PostgreSQL postgis packages.
 
-###Class: postgresql::server
-The following list are options that you can set in the `config_hash` parameter of `postgresql::server`.
+### Defined Types
 
-####`postgres_password`
-This value defaults to `undef`, meaning the super user account in the postgres database is a user called `postgres` and this account does not have a password. If you provide this setting, the module will set the password for the `postgres` user to your specified value.
+#### postgresql::server::config_entry
 
-####`package_name`
-The name of the package to use for installing the server software. Defaults to the default for your OS distro.
+Modifies your `postgresql.conf` configuration file.
 
-####`package_ensure`
-Value to pass through to the `package` resource when creating the server instance. Defaults to `undef`.
+Each resource maps to a line inside the file, for example:
 
-####`plperl_package_name`
-This sets the default package name for the PL/Perl extension. Defaults to utilising the operating system default.
+```puppet
+postgresql::server::config_entry { 'check_function_bodies':
+  value => 'off',
+}
+```
 
-####`service_name`
-This setting can be used to override the default postgresql service name. If not specified, the module will use whatever service name is the default for your OS distro.
+##### `ensure`
 
-####`service_provider`
-This setting can be used to override the default postgresql service provider. If not specified, the module will use whatever service name is the default for your OS distro.
+Removes an entry if set to 'absent'.
 
-####`service_status`
-This setting can be used to override the default status check command for your PostgreSQL service. If not specified, the module will use whatever service name is the default for your OS distro.
+Valid values: 'present', 'absent'.
 
-####`default_database`
-This setting is used to specify the name of the default database to connect with. On most systems this will be "postgres".
+Default value: 'present'.
 
-####`listen_addresses`
-This value defaults to `localhost`, meaning the postgres server will only accept connections from localhost. If you'd like to be able to connect to postgres from remote machines, you can override this setting. A value of `*` will tell postgres to accept connections from any remote machine. Alternately, you can specify a comma-separated list of hostnames or IP addresses. (For more info, have a look at the `postgresql.conf` file from your system's postgres package).
+##### `value`
 
-####`port`
-This value defaults to `5432`, meaning the postgres server will listen on TCP port 5432. Note that the same port number is used for all IP addresses the server listens on.
+Defines the value for the setting.
 
-####`ip_mask_deny_postgres_user`
-This value defaults to `0.0.0.0/0`. Sometimes it can be useful to block the superuser account from remote connections if you are allowing other database users to connect remotely. Set this to an IP and mask for which you want to deny connections by the postgres superuser account. So, e.g., the default value of `0.0.0.0/0` will match any remote IP and deny access, so the postgres user won't be able to connect remotely at all. Conversely, a value of `0.0.0.0/32` would not match any remote IP, and thus the deny rule will not be applied and the postgres user will be allowed to connect.
+#### postgresql::server::db
 
-####`ip_mask_allow_all_users`
-This value defaults to `127.0.0.1/32`. By default, Postgres does not allow any database user accounts to connect via TCP from remote machines. If you'd like to allow them to, you can override this setting. You might set it to `0.0.0.0/0` to allow database users to connect from any remote machine, or `192.168.0.0/16` to allow connections from any machine on your local 192.168 subnet.
+Creates a local database, user, and assigns necessary permissions.
 
-####`ipv4acls`
-List of strings for access control for connection method, users, databases, IPv4 addresses; see [postgresql documentation](http://www.postgresql.org/docs/9.2/static/auth-pg-hba-conf.html) about `pg_hba.conf` for information (please note that the link will take you to documentation for the most recent version of Postgres, however links for earlier versions can be found on that page).
+##### `comment`
 
-####`ipv6acls`
-List of strings for access control for connection method, users, databases, IPv6 addresses; see [postgresql documentation](http://www.postgresql.org/docs/9.2/static/auth-pg-hba-conf.html) about `pg_hba.conf` for information (please note that the link will take you to documentation for the most recent version of Postgres, however links for earlier versions can be found on that page).
+Defines a comment to be stored about the database using the PostgreSQL COMMENT command.
 
-####`initdb_path`
-Path to the `initdb` command.
+##### `connect_settings`
 
-####`createdb_path`
-Path to the `createdb` command.
+Specifies a hash of environment variables used when connecting to a remote server.
 
-####`psql_path`
-Path to the `psql` command.
+Default value: Connects to the local Postgres instance.
 
-####`pg_hba_conf_path`
-Path to your `pg\_hba.conf` file.
+##### `dbname`
 
-####`pg_ident_conf_path`
-Path to your `pg\_ident.conf` file.
+Sets the name of the database to be created.
 
-####`postgresql_conf_path`
-Path to your `postgresql.conf` file.
+Default value: the namevar.
 
-####`pg_hba_conf_defaults`
-If false, disables the defaults supplied with the module for `pg\_hba.conf`. This is useful if you di
-sagree with the defaults and wish to override them yourself. Be sure that your changes of course alig
-n with the rest of the module, as some access is required to perform basic `psql` operations for exam
-ple.
+##### `encoding`
 
-####`user`
-This setting can be used to override the default postgresql super user and owner of postgresql related files in the file system. If not specified, the module will use the user name 'postgres'.
+Overrides the character set during creation of the database.
 
-####`group`
-This setting can be used to override the default postgresql user group to be used for related files in the file system. If not specified, the module will use the group name 'postgres'.
+Default value: The default defined during installation.
 
-####`needs_initdb`
-This setting can be used to explicitly call the initdb operation after server package is installed and before the postgresql service is started. If not specified, the module will decide whether to call initdb or not depending on your OS distro.
+##### `grant`
 
-####`encoding`
-This will set the default encoding encoding for all databases created with this module. On certain operating systems this will be used during the `template1` initialization as well so it becomes a default outside of the module as well. Defaults to the operating system default.
+Specifies the permissions to grant during creation.
 
-####`locale`
-This will set the default database locale for all databases created with this module. On certain operating systems this will be used during the `template1` initialization as well so it becomes a default outside of the module as well. Defaults to `undef` which is effectively `C`.
+Default value: 'ALL'.
 
-#####Debian
+##### `istemplate`
 
-On Debian you'll need to ensure that the 'locales-all' package is installed for full functionality of Postgres.
+Specifies that the database is a template, if set to `true`.
 
-####`manage_pg_hba_conf`
-This value defaults to `true`. Whether or not manage the pg_hba.conf. If set to `true`, puppet will overwrite this file. If set to `false`, puppet will not modify the file.
+Default value: `false`.
 
-####`manage_pg_ident_conf`
-This value defaults to `true`. Whether or not manage the pg_ident.conf. If set to `true`, puppet will overwrite this file. If set to `false`, puppet will not modify the file.
+##### `locale`
 
-###Class: postgresql::client
+Overrides the locale during creation of the database.
 
-This class installs postgresql client software. Alter the following parameters if you have a custom version you would like to install (Note: don't forget to make sure to add any necessary yum or apt repositories if specifying a custom version):
+Default value: The default defined during installation.
 
-####`package_name`
-The name of the postgresql client package.
+##### `owner`
 
-####`package_ensure`
-The ensure parameter passed on to postgresql client package resource.
+Sets a user as the owner of the database.
 
+Default value: '$user' variable set in `postgresql::server` or `postgresql::globals`.
 
-###Class: postgresql::server::contrib
-Installs the postgresql contrib package.
+##### `password`
 
-####`package_name`
-The name of the postgresql contrib package.
+**Required** Sets the password for the created user.
 
-####`package_ensure`
-The ensure parameter passed on to postgresql contrib package resource.
+##### `tablespace`
+
+Defines the name of the tablespace to allocate the created database to.
+
+Default value: PostgreSQL default. ???
 
 ###Class: postgresql::server::ssl_certificate
 Installs a self-signed openssl certificate on the server to permit hostssl connections in pg_hba.conf, as well as for use as a CA to sign client CSR's.  It can be used like so:
@@ -514,460 +1127,833 @@ http://www.postgresql.org/docs/9.3/static/ssl-tcp.html
 ###Class: postgresql::server::postgis
 Installs the postgresql postgis packages.
 
-###Class: postgresql::lib::devel
-Installs the packages containing the development libraries for PostgreSQL and
-symlinks pg_config into `/usr/bin` (if not in `/usr/bin` or `/usr/local/bin`).
+Default value: PostgreSQL default. ???
 
-####`package_ensure`
-Override for the `ensure` parameter during package installation. Defaults to `present`.
+##### `template`
 
-####`package_name`
-Overrides the default package name for the distribution you are installing to. Defaults to `postgresql-devel` or `postgresql<version>-devel` depending on your distro.
+Specifies the name of the template database from which to build this database.
 
-####`link_pg_config`
-By default, if the bin directory used by the PostgreSQL package is not `/usr/bin` or `/usr/local/bin`,
-this class will symlink `pg_config` from the package's bin dir into `/usr/bin`. Set `link_pg_config` to
-false to disable this behavior.
+Defaults value: `template0`.
 
-###Class: postgresql::lib::java
-This class installs postgresql bindings for Java (JDBC). Alter the following parameters if you have a custom version you would like to install (Note: don't forget to make sure to add any necessary yum or apt repositories if specifying a custom version):
+##### `user`
 
-####`package_name`
-The name of the postgresql java package.
-
-####`package_ensure`
-The ensure parameter passed on to postgresql java package resource.
-
-
-###Class: postgresql::lib::perl
-This class installs the postgresql Perl libraries. For customer requirements you can customise the following parameters:
-
-####`package_name`
-The name of the postgresql perl package.
-
-####`package_ensure`
-The ensure parameter passed on to postgresql perl package resource.
-
-
-###Class: postgresql::lib::python
-This class installs the postgresql Python libraries. For customer requirements you can customise the following parameters:
-
-####`package_name`
-The name of the postgresql python package.
-
-####`package_ensure`
-The ensure parameter passed on to postgresql python package resource.
-
-
-###Class: postgresql::server::plperl
-This class installs the PL/Perl procedural language for postgresql.
-
-####`package_name`
-The name of the postgresql PL/Perl package.
-
-####`package_ensure`
-The ensure parameter passed on to postgresql PL/Perl package resource.
-
-
-###Resource: postgresql::server::config\_entry
-This resource can be used to modify your `postgresql.conf` configuration file.
-
-Each resource maps to a line inside your `postgresql.conf` file, for example:
-
-    postgresql::server::config_entry { 'check_function_bodies':
-      value => 'off',
-    }
-
-####`namevar`
-Name of the setting to change.
-
-####`ensure`
-Set to `absent` to remove an entry.
-
-####`value`
-Value for the setting.
-
-
-###Resource: postgresql::server::db
-This is a convenience resource that creates a database, user and assigns necessary permissions in one go.
-
-For example, to create a database called `test1` with a corresponding user of the same name, you can use:
-
-    postgresql::server::db { 'test1':
-      user     => 'test1',
-      password => 'test1',
-    }
-
-####`namevar`
-The namevar for the resource designates the name of the database.
-
-####`dbname`
-The name of the database to be created. Defaults to `namevar`.
-
-####`user`
 User to create and assign access to the database upon creation. Mandatory.
 
-####`password`
-Password for the created user. Mandatory.
+#### postgresql::server::database
 
-####`encoding`
-Override the character set during creation of the database. Defaults to the default defined during installation.
+Creates a database with no users and no permissions.
 
-####`locale`
-Override the locale during creation of the database. Defaults to the default defined during installation.
+##### `dbname`
 
-####`grant`
-Grant permissions during creation. Defaults to `ALL`.
+Sets the name of the database.
 
-####`tablespace`
-The name of the tablespace to allocate this database to. If not specifies, it defaults to the PostgreSQL default.
+Defaults value: The namevar.
 
-####`istemplate`
-Define database as a template. Defaults to `false`.
+##### `encoding`
 
+Overrides the character set during creation of the database.
 
-###Resource: postgresql::server::database
-This defined type can be used to create a database with no users and no permissions, which is a rare use case.
+Default value: The default defined during installation.
 
-####`namevar`
-The name of the database to create.
+##### `istemplate`
 
-####`dbname`
-The name of the database, defaults to the namevar.
+Defines the database as a template if set to `true`.
 
-####`owner`
-Name of the database user who should be set as the owner of the database. Defaults to the $user variable set in `postgresql::server` or `postgresql::globals`.
+Default value: `false`.
 
-####`tablespace`
-Tablespace for where to create this database. Defaults to the defaults defined during PostgreSQL installation.
+##### `locale`
 
-####`encoding`
-Override the character set during creation of the database. Defaults to the default defined during installation.
+Overrides the locale during creation of the database.
 
-####`locale`
-Override the locale during creation of the database. Defaults to the default defined during installation.
+Default value: The default defined during installation.
 
-####`istemplate`
-Define database as a template. Defaults to `false`.
+##### `owner`
 
+Sets name of the database owner.
 
-###Resource: postgresql::server::database\_grant
-This defined type manages grant based access privileges for users, wrapping the `postgresql::server::database_grant` for database specific permissions. Consult the PostgreSQL documentation for `grant` for more information.
+Default value: The '$user' variable set in `postgresql::server` or `postgresql::globals`.
 
-####`namevar`
-Used to uniquely identify this resource, but functionality not used during grant.
+##### `tablespace`
 
-####`privilege`
-Can be one of `SELECT`, `TEMPORARY`, `TEMP`, `CONNECT`. `ALL` is used as a synonym for `CREATE`. If you need to add multiple privileges, a space delimited string can be used.
+Sets tablespace for where to create this database.
 
-####`db`
-Database to grant access to.
+Default value: The default defined during installation.
 
-####`role`
-Role or user whom you are granting access for.
+##### `template`
 
-####`psql_db`
-Database to execute the grant against. This should not ordinarily be changed from the default, which is `postgres`.
+Specifies the name of the template database from which to build this database.
 
-####`psql_user`
-OS user for running `psql`. Defaults to the default user for the module, usually `postgres`.
+Default value: 'template0'.
 
+#### postgresql::server::database_grant
 
-###Resource: postgresql::server::pg\_hba\_rule
-This defined type allows you to create an access rule for `pg_hba.conf`. For more details see the [PostgreSQL documentation](http://www.postgresql.org/docs/8.2/static/auth-pg-hba-conf.html).
+Manages grant-based access privileges for users, wrapping the `postgresql::server::database_grant` for database specific permissions. Consult the [PostgreSQL documentation for `grant`](http://www.postgresql.org/docs/current/static/sql-grant.html) for more information.
 
-For example:
+##### `ensure`
 
-    postgresql::server::pg_hba_rule { 'allow application network to access app database':
-      description => "Open up postgresql for access from 200.1.2.0/24",
-      type => 'host',
-      database => 'app',
-      user => 'app',
-      address => '200.1.2.0/24',
-      auth_method => 'md5',
-    }
+Specifies whether to grant or revoke the privilege. Revoke or 'absent' works only in PostgreSQL version 9.1.24 or later.
 
-This would create a ruleset in `pg_hba.conf` similar to:
+Valid values: 'present', 'absent'.
+* 'present' to grant the privilege
+* 'absent' to revoke the privilege
 
-    # Rule Name: allow application network to access app database
-    # Description: Open up postgresql for access from 200.1.2.0/24
-    # Order: 150
-    host  app  app  200.1.2.0/24  md5
+Default value: 'present'.
 
-####`namevar`
-A unique identifier or short description for this rule. The namevar doesn't provide any functional usage, but it is stored in the comments of the produced `pg_hba.conf` so the originating resource can be identified.
+#### `connect_settings`
 
-####`description`
-A longer description for this rule if required. Defaults to `none`. This description is placed in the comments above the rule in `pg_hba.conf`.
+Specifies a hash of environment variables used when connecting to a remote server.
 
-####`type`
-The type of rule, this is usually one of: `local`, `host`, `hostssl` or `hostnossl`.
+Default value: Connects to the local Postgres instance.
 
-####`database`
-A comma separated list of databases that this rule matches.
+##### `db`
 
-####`user`
-A comma separated list of database users that this rule matches.
+Specifies the database to which you are granting access.
 
-####`address`
-If the type is not 'local' you can provide a CIDR based address here for rule matching.
+##### `privilege`
 
-####`auth_method`
-The `auth_method` is described further in the `pg_hba.conf` documentation, but it provides the method that is used for authentication for the connection that this rule matches.
+Specifies comma-separated list of privileges to grant.
 
-####`auth_option`
+Valid options: 'ALL', 'CREATE', 'CONNECT', 'TEMPORARY', 'TEMP'.
+
+##### `psql_db`
+
+Defines the database to execute the grant against.
+
+**This should not ordinarily be changed from the default**
+
+Default value: 'postgres'.
+
+##### `psql_user`
+
+Specifies the OS user for running `psql`.
+
+Default value: The default user for the module, usually 'postgres'.
+
+##### `role`
+
+Specifies the role or user whom you are granting access to.
+
+#### postgresql::server::extension
+
+Manages a PostgreSQL extension.
+
+##### `database`
+
+Specifies the database on which to activate the extension.
+
+##### `schema`
+
+Specifies the schema on which to activate the extension.
+
+##### `ensure`
+
+Specifies whether to activate or deactivate the extension.
+
+Valid options: 'present' or 'absent'.
+
+#### `extension`
+
+Specifies the extension to activate. If left blank, uses the name of the resource.
+
+#### `version`
+
+Specifies the version of the extension which the database uses.
+When an extension package is updated, this does not automatically change the effective version in each database.
+
+This needs be updated using the PostgreSQL-specific SQL `ALTER EXTENSION...`
+
+`version` may be set to `latest`, in which case the SQL `ALTER EXTENSION "extension" UPDATE` is applied to this database (only).
+
+`version` may be set to a specific version, in which case the extension is updated using `ALTER EXTENSION "extension" UPDATE TO 'version'`
+
+eg. If extension is set to `postgis` and version is set to `2.3.3`, this will apply the SQL `ALTER EXTENSION "postgis" UPDATE TO '2.3.3'` to this database only.
+
+`version` may be omitted, in which case no `ALTER EXTENSION...` SQL is applied, and the version will be left unchanged.
+
+##### `package_name`
+
+Specifies a package to install prior to activating the extension.
+
+##### `package_ensure`
+
+Overrides default package deletion behavior.
+
+By default, the package specified with `package_name` is installed when the extension is activated and removed when the extension is deactivated. To override this behavior, set the `ensure` value for the package.
+
+#### postgresql::server::grant
+
+Manages grant-based access privileges for roles. See [PostgreSQL documentation for `grant`](http://www.postgresql.org/docs/current/static/sql-grant.html) for more information.
+
+##### `ensure`
+
+Specifies whether to grant or revoke the privilege. Default is to grant the privilege.
+
+Valid values: 'present', 'absent'.
+* 'present' to grant the privilege
+* 'absent' to revoke the privilege
+
+Default value: 'present'.
+
+##### `db`
+
+Specifies the database to which you are granting access.
+
+##### `object_type`
+
+Specifies the type of object to which you are granting privileges.
+
+Valid options: 'DATABASE', 'SCHEMA', 'SEQUENCE', 'ALL SEQUENCES IN SCHEMA', 'TABLE' or 'ALL TABLES IN SCHEMA'.
+
+##### `object_name`
+
+Specifies name of `object_type` to which to grant access, can be either a string or a two element array.
+
+String: 'object_name'
+Array:  ['schema_name', 'object_name']
+
+##### `port`
+
+Port to use when connecting.
+
+Default value: `undef`, which generally defaults to port 5432 depending on your PostgreSQL packaging.
+
+##### `privilege`
+
+Specifies the privilege to grant.
+
+Valid options: 'ALL', 'ALL PRIVILEGES' or 'object_type' dependent string.
+
+##### `psql_db`
+
+Specifies the database to execute the grant against.
+
+**This should not ordinarily be changed from the default**
+
+Default value: 'postgres'.
+
+##### `psql_user`
+
+Sets the OS user to run `psql`.
+
+Default value: the default user for the module, usually 'postgres'.
+
+##### `role`
+
+Specifies the role or user whom you are granting access to.
+
+#### postgresql::server::grant_role
+
+Allows you to assign a role to a (group) role. See [PostgreSQL documentation for `Role Membership`](http://www.postgresql.org/docs/current/static/role-membership.html) for more information.
+
+##### `group`
+
+Specifies the group role to which you are assigning a role.
+
+##### `role`
+
+Specifies the role you want to assign to a group.  If left blank, uses the name of the resource.
+
+##### `ensure`
+
+Specifies whether to grant or revoke the membership.
+
+Valid options: 'present' or 'absent'.
+
+Default value: 'present'.
+
+##### `port`
+
+Port to use when connecting.
+
+Default value: `undef`, which generally defaults to port 5432 depending on your PostgreSQL packaging.
+
+##### `psql_db`
+
+Specifies the database to execute the grant against.
+
+**This should not ordinarily be changed from the default**
+
+Default value: 'postgres'.
+
+##### `psql_user`
+
+Sets the OS user to run `psql`.
+
+Default value: the default user for the module, usually `postgres`.
+
+##### `connect_settings`
+
+Specifies a hash of environment variables used when connecting to a remote server.
+
+Default value: Connects to the local Postgres instance.
+
+#### postgresql::server::pg_hba_rule
+
+Allows you to create an access rule for `pg_hba.conf`. For more details see the [usage example](#create-an-access-rule-for-pghba.conf) and the [PostgreSQL documentation](http://www.postgresql.org/docs/current/static/auth-pg-hba-conf.html).
+
+##### `address`
+
+Sets a CIDR based address for this rule matching when the type is not 'local'.
+
+##### `auth_method`
+
+Provides the method that is used for authentication for the connection that this rule matches. Described further in the PostgreSQL `pg_hba.conf` documentation.
+
+##### `auth_option`
+
 For certain `auth_method` settings there are extra options that can be passed. Consult the PostgreSQL `pg_hba.conf` documentation for further details.
 
-####`order`
-An order for placing the rule in `pg_hba.conf`. Defaults to `150`.
+##### `database`
 
-####`target`
-This provides the target for the rule, and is generally an internal only property. Use with caution.
+Sets a comma-separated list of databases that this rule matches.
 
+##### `description`
 
-###Resource: postgresql::server::pg\_ident\_rule
-This defined type allows you to create user name maps for `pg_ident.conf`. For more details see the [PostgreSQL documentation](http://www.postgresql.org/docs/9.4/static/auth-username-maps.html).
+Defines a longer description for this rule, if required. This description is placed in the comments above the rule in `pg_hba.conf`.
 
-For example:
+Default value: 'none'.
 
-    postgresql::server::pg_ident_rule{ 'Map the SSL certificate of the backup server as a replication user':
-      map_name          => 'sslrepli',
-      system_username   => 'repli1.example.com',
-      database_username => 'replication',
-    }
+Specifies a way to uniquely identify this resource, but functionally does nothing.
 
-This would create a user name map in `pg_ident.conf` similar to:
+##### `order`
 
-    # Rule Name: Map the SSL certificate of the backup server as a replication user
-    # Description: none
-    # Order: 150
-    sslrepli	repli1.example.com	replication
+Sets an order for placing the rule in `pg_hba.conf`.
 
-####`namevar`
-A unique identifier or short description for this rule. The namevar doesn't provide any functional usage, but it is stored in the comments of the produced `pg_ident.conf` so the originating resource can be identified.
+Default value: 150.
 
-####`description`
-A longer description for this rule if required. Defaults to `none`. This description is placed in the comments above the rule in `pg_ident.conf`.
+#### `postgresql_version`
 
-####`map_name`
-Name of the user map, that is used to refer to this mapping in `pg_hba.conf`.
+Manages `pg_hba.conf` without managing the entire PostgreSQL instance.
 
-####`system_username`
-Operating system user name, the user name used to connect to the database.
+Default value: the version set in `postgresql::server`.
 
-####`database_username`
-Database user name, the user name of the the database user. The `system_username` will be mapped to this user name.
+##### `target`
 
-####`order`
-An order for placing the mapping in pg_ident.conf. Defaults to 150.
+Provides the target for the rule, and is generally an internal only property.
 
-####`target`
-This provides the target for the rule, and is generally an internal only property. Use with caution.
+**Use with caution.**
 
+##### `type`
 
-###Resource: postgresql::server::role
-This resource creates a role or user in PostgreSQL.
+Sets the type of rule.
 
-####`namevar`
-The role name to create.
+Valid options: 'local', 'host', 'hostssl' or 'hostnossl'.
 
-####`password_hash`
-The hash to use during password creation. If the password is not already pre-encrypted in a format that PostgreSQL supports, use the `postgresql_password` function to provide an MD5 hash here, for example:
+##### `user`
 
-    postgresql::role { "myusername":
-      password_hash => postgresql_password('myusername', 'mypassword'),
-    }
+Sets a comma-separated list of users that this rule matches.
 
-####`createdb`
-Whether to grant the ability to create new databases with this role. Defaults to `false`.
 
-####`createrole`
-Whether to grant the ability to create new roles with this role. Defaults to `false`.
+#### postgresql::server::pg_ident_rule
 
-####`login`
-Whether to grant login capability for the new role. Defaults to `false`.
+Allows you to create user name maps for `pg_ident.conf`. For more details see the [usage example](#create-user-name-maps-for-pgidentconf) above and the [PostgreSQL documentation](http://www.postgresql.org/docs/current/static/auth-username-maps.html).
 
-####`inherit`
-Whether to grant inherit capability for the new role. Defaults to `true`.
+##### `database_username`
 
-####`superuser`
-Whether to grant super user capability for the new role. Defaults to `false`.
+Specifies the user name of the database user. The `system_username` is mapped to this user name.
 
-####`replication`
-If `true` provides replication capabilities for this role. Defaults to `false`.
+##### `description`
 
-####`connection_limit`
-Specifies how many concurrent connections the role can make. Defaults to `-1` meaning no limit.
+Sets a longer description for this rule if required. This description is placed in the comments above the rule in `pg_ident.conf`.
 
-####`username`
-The username of the role to create, defaults to `namevar`.
+Default value: 'none'.
 
-###Resource: postgresql::server::schema
-This defined type can be used to create a schema. For example:
+##### `map_name`
 
-    postgresql::server::schema { 'isolated':
-      owner => 'jane',
-      db    => 'janedb',
-    }
+Sets the name of the user map that is used to refer to this mapping in `pg_hba.conf`.
 
-It will create the schema `jane` in the database `janedb` if neccessary,
-assigning the user `jane` ownership permissions.
+##### `order`
 
-####`namevar`
-The schema name to create.
+Defines an order for placing the mapping in `pg_ident.conf`.
 
-###`db`
-Name of the database in which to create this schema. This must be passed.
+Default value: 150.
 
-####`owner`
-The default owner of the schema.
+##### `system_username`
 
-####`schema`
-Name of the schma. Defaults to `namevar`.
+Specifies the operating system user name (the user name used to connect to the database).
 
+##### `target`
 
-###Resource: postgresql::server::table\_grant
-This defined type manages grant based access privileges for users. Consult the PostgreSQL documentation for `grant` for more information.
+Provides the target for the rule and is generally an internal only property.
 
-####`namevar`
-Used to uniquely identify this resource, but functionality not used during grant.
+**Use with caution.**
 
-####`privilege`
-Can be one of `SELECT`, `INSERT`, `UPDATE`, `REFERENCES`. `ALL` is used as a synonym for `CREATE`. If you need to add multiple privileges, a space delimited string can be used.
+#### postgresql::server::reassign_owned_by
 
-####`table`
-Table to grant access on.
+Runs the PostgreSQL command 'REASSIGN OWNED' on a database, to transfer the ownership of existing objects between database roles
 
-####`db`
-Database of table.
+##### `db`
 
-####`role`
-Role or user whom you are granting access for.
+Specifies the database to which the 'REASSIGN OWNED' will be applied
 
-####`psql_db`
-Database to execute the grant against. This should not ordinarily be changed from the default, which is `postgres`.
+##### `old_role`
 
-####`psql_user`
-OS user for running `psql`. Defaults to the default user for the module, usually `postgres`.
+Specifies the role or user who is the current owner of the objects in the specified db
 
+##### `new_role`
 
-###Resource: postgresql::server::tablespace
-This defined type can be used to create a tablespace. For example:
+Specifies the role or user who will be the new owner of these objects
 
-    postgresql::server::tablespace { 'tablespace1':
-      location => '/srv/space1',
-    }
+##### `psql_user`
 
-It will create the location if necessary, assigning it the same permissions as your
-PostgreSQL server.
+Specifies the OS user for running `psql`.
 
-####`namevar`
-The tablespace name to create.
+Default value: The default user for the module, usually 'postgres'.
 
-####`location`
-The path to locate this tablespace.
+##### `port`
 
-####`owner`
-The default owner of the tablespace.
+Port to use when connecting.
 
-####`spcname`
-Name of the tablespace. Defaults to `namevar`.
+Default value: `undef`, which generally defaults to port 5432 depending on your PostgreSQL packaging.
 
+##### `connect_settings`
 
-###Resource: postgresql::validate\_db\_connection
-This resource can be utilised inside composite manifests to validate that a client has a valid connection with a remote PostgreSQL database. It can be ran from any node where the PostgreSQL client software is installed to validate connectivity before commencing other dependent tasks in your Puppet manifests, so it is often used when chained to other tasks such as: starting an application server, performing a database migration.
+Specifies a hash of environment variables used when connecting to a remote server.
 
-Example usage:
+Default value: Connects to the local Postgres instance.
 
-    postgresql::validate_db_connection { 'validate my postgres connection':
-      database_host           => 'my.postgres.host',
-      database_username       => 'mydbuser',
-      database_password       => 'mydbpassword',
-      database_name           => 'mydbname',
-    }->
-    exec { 'rake db:migrate':
-      cwd => '/opt/myrubyapp',
-    }
+#### postgresql::server::recovery
 
-####`namevar`
-Uniquely identify this resource, but functionally does nothing.
+Allows you to create the content for `recovery.conf`. For more details see the [usage example](#create-recovery-configuration) and the [PostgreSQL documentation](http://www.postgresql.org/docs/current/static/recovery-config.html).
 
-####`database_host`
-The hostname of the database you wish to test. Defaults to 'undef' which generally uses the designated local unix socket.
+Every parameter value is a string set in the template except `recovery_target_inclusive`, `pause_at_recovery_target`, `standby_mode` and `recovery_min_apply_delay`.
 
-####`database_port`
-Port to use when connecting. Default to 'undef' which generally defaults to 5432 depending on your PostgreSQL packaging.
+A detailed description of all listed parameters can be found in the [PostgreSQL documentation](http://www.postgresql.org/docs/current/static/recovery-config.html).
 
-####`database_name`
-The name of the database you wish to test. Defaults to 'postgres'.
+The parameters are grouped into these three sections:
 
-####`database_username`
-Username to connect with. Defaults to 'undef', which when using a unix socket and ident auth will be the user you are running as. If the host is remote you must provide a username.
+##### [Archive Recovery Parameters](http://www.postgresql.org/docs/current/static/archive-recovery-settings.html)
 
-####`database_password`
-Password to connect with. Can be left blank, but that is not recommended.
+* `restore_command`
+* `archive_cleanup_command`
+* `recovery_end_command`
 
-####`run_as`
-The user to run the `psql` command with for authenticiation. This is important when trying to connect to a database locally using Unix sockets and `ident` authentication. It is not needed for remote testing.
+##### [Recovery Target Settings](http://www.postgresql.org/docs/current/static/recovery-target-settings.html)
+* `recovery_target_name`
+* `recovery_target_time`
+* `recovery_target_xid`
+* `recovery_target_inclusive`
+* `recovery_target`
+* `recovery_target_timeline`
+* `pause_at_recovery_target`
 
-####`sleep`
-Upon failure, sets the number of seconds to sleep for before trying again.
+##### [Standby Server Settings](http://www.postgresql.org/docs/current/static/standby-settings.html)
+* `standby_mode`: Can be specified with the string ('on'/'off'), or by using a Boolean value (`true`/`false`).
+* `primary_conninfo`
+* `primary_slot_name`
+* `trigger_file`
+* `recovery_min_apply_delay`
 
-####`tries`
-Upon failure, sets the number of attempts before giving up and failing the resource.
+##### `target`
+Provides the target for the rule, and is generally an internal only property.
 
-####`create_db_first`
-This will ensure the database is created before running the test. This only really works if your test is local. Defaults to `true`.
+**Use with caution.**
 
+#### postgresql::server::role
+Creates or drops a role or user in PostgreSQL.
 
-###Function: postgresql\_password
-If you need to generate a postgres encrypted password, use `postgresql_password`. You can call it from your production manifests if you don't mind them containing the clear text versions of your passwords, or you can call it from the command line and then copy and paste the encrypted password into your manifest:
+##### `ensure`
 
-    $ puppet apply --execute 'notify { "test": message => postgresql_password("username", "password") }'
+Specify whether to create or drop the role.
 
-###Function: postgresql\_acls\_to\_resources\_hash(acl\_array, id, order\_offset)
-This internal function converts a list of `pg_hba.conf` based acls (passed in as an array of strings) to a format compatible with the `postgresql::pg_hba_rule` resource.
+Specifying 'present' creates the role.
+Specifying 'absent' drops the role.
+
+Default value: 'present'.
+
+##### `connection_limit`
+Specifies how many concurrent connections the role can make.
+
+Default value: '-1', meaning no limit.
+
+##### `connect_settings`
+Specifies a hash of environment variables used when connecting to a remote server.
+
+Default value: Connects to the local Postgres instance.
+
+##### `createdb`
+Specifies whether to grant the ability to create new databases with this role.
+
+Default value: `false`.
+
+##### `createrole`
+Specifies whether to grant the ability to create new roles with this role.
+
+Default value: `false`.
+
+##### `inherit`
+Specifies whether to grant inherit capability for the new role.
+
+Default value: `true`.
+
+##### `login`
+Specifies whether to grant login capability for the new role.
+
+Default value: `true`.
+
+##### `password_hash`
+Sets the hash to use during password creation. If the password is not already pre-encrypted in a format that PostgreSQL supports, use the `postgresql_password` function to provide an MD5 hash here, for example:
+
+##### `update_password`
+If set to true, updates the password on changes. Set this to false to not modify the role's password after creation.
+
+```puppet
+postgresql::server::role { 'myusername':
+  password_hash => postgresql_password('myusername', 'mypassword'),
+}
+```
+
+##### `replication`
+
+Provides provides replication capabilities for this role if set to `true`.
+
+Default value: `false`.
+
+##### `superuser`
+
+Specifies whether to grant super user capability for the new role.
+
+Default value: `false`.
+
+##### `username`
+
+Defines the username of the role to create.
+
+Default value: the namevar.
+
+#### postgresql::server::schema
+
+Creates a schema.
+
+##### `connect_settings`
+
+Specifies a hash of environment variables used when connecting to a remote server.
+
+Default value: Connects to the local Postgres instance.
+
+##### `db`
+
+Required.
+
+Sets the name of the database in which to create this schema.
+
+##### `owner`
+
+Sets the default owner of the schema.
+
+##### `schema`
+
+Sets the name of the schema.
+
+Default value: the namevar.
+
+#### postgresql::server::table_grant
+
+Manages grant-based access privileges for users. Consult the PostgreSQL documentation for `grant` for more information.
+
+##### `ensure`
+
+Specifies whether to grant or revoke the privilege. Default is to grant the privilege.
+
+Valid values: 'present', 'absent'.
+* 'present' to grant the privilege
+* 'absent' to revoke the privilege
+
+Default value: 'present'.
+
+##### `connect_settings`
+
+Specifies a hash of environment variables used when connecting to a remote server.
+
+Default value: Connects to the local Postgres instance.
+
+##### `db`
+
+Specifies which database the table is in.
+
+##### `privilege`
+
+Specifies comma-separated list of privileges to grant. Valid options: 'ALL', 'SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'.
+
+##### `psql_db`
+
+Specifies the database to execute the grant against.
+
+This should not ordinarily be changed from the default.
+
+Default value: 'postgres'.
+
+##### `psql_user`
+
+Specifies the OS user for running `psql`.
+
+Default value: The default user for the module, usually 'postgres'.
+
+##### `role`
+
+Specifies the role or user to whom you are granting access.
+
+##### `table`
+
+Specifies the table to which you are granting access.
+
+#### postgresql::server::tablespace
+
+Creates a tablespace. If necessary, also creates the location and assigns the same permissions as the PostgreSQL server.
+
+##### `connect_settings`
+
+Specifies a hash of environment variables used when connecting to a remote server.
+
+Default value: Connects to the local Postgres instance.
+
+##### `location`
+
+Specifies the path to locate this tablespace.
+
+##### `owner`
+
+Specifies the default owner of the tablespace.
+
+##### `spcname`
+
+Specifies the name of the tablespace.
+
+Default value: the namevar.
+
+### Types
+
+#### postgresql_psql
+
+Enables Puppet to run psql statements.
+
+##### `command`
+
+Required.
+
+Specifies the SQL command to execute via psql.
+
+##### `cwd`
+
+Specifies the working directory under which the psql command should be executed.
+
+Default value: '/tmp'.
+
+##### `db`
+
+Specifies the name of the database to execute the SQL command against.
+
+##### `environment`
+
+Specifies any additional environment variables you want to set for a SQL command. Multiple environment variables should be specified as an array.
+
+##### `name`
+
+Sets an arbitrary tag for your own reference; the name of the message. This is the namevar.
+
+##### `onlyif`
+
+Sets an optional SQL command to execute prior to the main command. This is generally intended to be used for idempotency, to check for the existence of an object in the database to determine whether or not the main SQL command needs to be executed at all.
+
+##### `port`
+
+Specifies the port of the database server to execute the SQL command against.
+
+##### `psql_group`
+
+Specifies the system user group account under which the psql command should be executed.
+
+Default value: 'postgres'.
+
+##### `psql_path`
+
+Specifies the path to psql executable.
+
+Default value: 'psql'.
+
+##### `psql_user`
+
+Specifies the system user account under which the psql command should be executed.
+
+Default value: 'postgres'.
+
+##### `refreshonly`
+
+Specifies whether to execute the SQL only if there is a notify or subscribe event.
+
+Valid values: `true`, `false`.
+
+Default value: `false`.
+
+##### `search_path`
+
+Defines the schema search path to use when executing the SQL command.
+
+##### `unless`
+
+The inverse of `onlyif`.
+
+#### postgresql_conf
+
+Allows Puppet to manage `postgresql.conf` parameters.
+
+##### `name`
+
+Specifies the PostgreSQL parameter name to manage.
+
+This is the namevar.
+
+##### `target`
+
+Specifies the path to `postgresql.conf`.
+
+Default value: '/etc/postgresql.conf'.
+
+##### `value`
+
+Specifies the value to set for this parameter.
+
+#### postgresql_replication_slot
+
+Allows you to create and destroy replication slots to register warm standby replication on a PostgreSQL master server.
+
+##### `name`
+
+Specifies the name of the slot to create. Must be a valid replication slot name.
+
+This is the namevar.
+
+##### `ensure`
+
+Required.
+
+Specifies the action to create or destroy named slot.
+
+Valid values: 'present', 'absent'.
+
+Default value: 'present'.
+
+#### postgresql_conn_validator
+
+Validate the connection to a local or remote PostgreSQL database using this type.
+
+##### `connect_settings`
+
+Specifies a hash of environment variables used when connecting to a remote server. This is an alternative to providing individual parameters (`host`, etc). If provided, the individual parameters take precedence.
+
+Default value: {}
+
+##### `db_name`
+
+Specifies the name of the database you wish to test.
+
+Default value: ''
+
+##### `db_password`
+
+Specifies the password to connect with. Can be left blank if `.pgpass` is being used, otherwise not recommended.
+
+Default value: ''
+
+##### `db_username`
+
+Specifies the username to connect with.
+
+Default value: ''
+
+When using a Unix socket and ident auth, this is the user you are running as.
+
+##### `command`
+
+This is the command run against the target database to verify connectivity.
+
+Default value: 'SELECT 1'
+
+##### `host`
+
+Sets the hostname of the database you wish to test.
+
+Default value: '', which generally uses the designated local Unix socket.
+
+**If the host is remote you must provide a username.**
+
+##### `port`
+
+Defines the port to use when connecting.
+
+Default value: ''
+
+##### `run_as`
+
+Specifies the user to run the `psql` command as. This is important when trying to connect to a database locally using Unix sockets and `ident` authentication. Not needed for remote testing.
+
+##### `sleep`
+
+Sets the number of seconds to sleep for before trying again after a failure.
+
+##### `tries`
+
+Sets the number of attempts after failure before giving up and failing the resource.
+
+### Functions
+
+#### postgresql_password
+
+Generates a PostgreSQL encrypted password, use `postgresql_password`. Call it from the command line and then copy and paste the encrypted password into your manifest:
+
+```shell
+puppet apply --execute 'notify { 'test': message => postgresql_password('username', 'password') }'
+```
+
+Alternatively, you can call this from your production manifests, but the manifests will then contain a clear text version of your passwords.
+
+#### postgresql_acls_to_resources_hash(acl_array, id, order_offset)
+
+This internal function converts a list of `pg_hba.conf` based ACLs (passed in as an array of strings) to a format compatible with the `postgresql::pg_hba_rule` resource.
 
 **This function should only be used internally by the module**.
 
-Limitations
-------------
+### Tasks
 
-Works with versions of PostgreSQL from 8.1 through 9.2.
+The Postgresql module has an example task that allows a user to execute arbitary SQL against a database. Please refer to to the [PE documentation](https://puppet.com/docs/pe/2017.3/orchestrator/running_tasks.html) or [Bolt documentation](https://puppet.com/docs/bolt/latest/bolt.html) on how to execute a task.
 
-Current it is only actively tested with the following operating systems:
 
-* Debian 6.x and 7.x
-* Centos 5.x, 6.x, and 7.x.
-* Ubuntu 10.04 and 12.04, 14.04
+## Limitations
 
-Although patches are welcome for making it work with other OS distros, it is considered best effort.
+Works with versions of PostgreSQL from 8.1 through 9.5.
 
-### Postgis support
+Currently, the postgresql module is tested on the following operating systems:
 
-Postgis is currently considered an unsupported feature as it doesn't work on
-all platforms correctly.
+* Debian 6.x, 7.x, 8.x.
+* CentOS 5.x, 6.x, and 7.x.
+* Ubuntu 10.04 and 12.04, 14.04.
 
-### All versions of RHEL/Centos
+Other systems might be compatible, but are not being actively tested.
 
-If you have selinux enabled you must add any custom ports you use to the postgresql_port_t context.  You can do this as follows:
+### Apt module support
 
+While this module supports both 1.x and 2.x versions of the 'puppetlabs-apt' module, it does not support 'puppetlabs-apt' 2.0.0 or 2.0.1.
+
+
+### PostGIS support
+
+PostGIS is currently considered an unsupported feature, as it doesn't work on all platforms correctly.
+
+### All versions of RHEL/CentOS
+
+If you have SELinux enabled you must add any custom ports you use to the `postgresql_port_t` context.  You can do this as follows:
+
+```shell
+semanage port -a -t postgresql_port_t -p tcp $customport
 ```
-# semanage port -a -t postgresql_port_t -p tcp $customport
-```
 
-Development
-------------
+## Development
 
-Puppet Labs modules on the Puppet Forge are open projects, and community contributions are essential for keeping them great. We can't access the huge number of platforms and myriad of hardware, software, and deployment configurations that Puppet is intended to serve.
-
-We want to keep it as easy as possible to contribute changes so that our modules work in your environment. There are a few guidelines that we need contributors to follow so that we can have a chance of keeping on top of things.
-
-You can read the complete module contribution guide [on the Puppet Labs wiki.](http://projects.puppetlabs.com/projects/module-site/wiki/Module_contributing)
+Puppet Labs modules on the Puppet Forge are open projects, and community contributions are essential for keeping them great. We can’t access the huge number of platforms and myriad hardware, software, and deployment configurations that Puppet is intended to serve. We want to keep it as easy as possible to contribute changes so that our modules work in your environment. There are a few guidelines that we need contributors to follow so that we can have a chance of keeping on top of things. For more information, see our [module contribution guide](https://docs.puppetlabs.com/forge/contributing.html).
 
 ### Tests
 
-There are two types of tests distributed with the module. Unit tests with rspec-puppet and system tests using rspec-system.
+There are two types of tests distributed with this module. Unit tests with `rspec-puppet` and system tests using `rspec-system`.
 
 For unit testing, make sure you have:
 
@@ -976,26 +1962,34 @@ For unit testing, make sure you have:
 
 Install the necessary gems:
 
-    bundle install --path=vendor
+```shell
+bundle install --path=vendor
+```
 
 And then run the unit tests:
 
-    bundle exec rake spec
+```shell
+bundle exec rake spec
+```
 
-The unit tests are ran in Travis-CI as well, if you want to see the results of your own tests regsiter the service hook through Travis-CI via the accounts section for your Github clone of this project.
+The unit tests are run in Travis-CI as well. If you want to see the results of your own tests, register the service hook through Travis-CI via the accounts section for your GitHub clone of this project.
 
-If you want to run the system tests, make sure you also have:
+To run the system tests, make sure you also have:
 
-* vagrant > 1.2.x
-* Virtualbox > 4.2.10
+* Vagrant > 1.2.x
+* VirtualBox > 4.2.10
 
 Then run the tests using:
 
-    bundle exec rspec spec/acceptance
+```shell
+bundle exec rspec spec/acceptance
+```
 
-To run the tests on different operating systems, see the sets available in .nodeset.yml and run the specific set with the following syntax:
+To run the tests on different operating systems, see the sets available in `.nodeset.yml` and run the specific set with the following syntax:
 
-    RSPEC_SET=debian-607-x64 bundle exec rspec spec/acceptance
+```shell
+RSPEC_SET=debian-607-x64 bundle exec rspec spec/acceptance
+```
 
 Transfer Notice
 ----------------
@@ -1004,29 +1998,10 @@ This Puppet module was originally authored by Inkling Systems. The maintainer pr
 
 Previously: [https://github.com/inkling/puppet-postgresql](https://github.com/inkling/puppet-postgresql)
 
-Contributors
-------------
+### Contributors
 
- * Andrew Moon
- * [Kenn Knowles](https://github.com/kennknowles) ([@kennknowles](https://twitter.com/KennKnowles))
- * Adrien Thebo
- * Albert Koch
- * Andreas Ntaflos
- * Bret Comnes
- * Brett Porter
- * Chris Price
- * dharwood
- * Etienne Pelletier
- * Florin Broasca
- * Henrik
- * Hunter Haugen
- * Jari Bakken
- * Jordi Boggiano
- * Ken Barber
- * nzakaria
- * Richard Arends
- * Spenser Gilliland
- * stormcrow
- * William Van Hevelingen
+View the full list of contributors on [Github](https://github.com/puppetlabs/puppetlabs-postgresql/graphs/contributors).
+
+The self-signed server certificate options were hacked in by:
  * [Hugh Esco](https://github.com/hesco) [YMD Partners LLC](http://campaignfoundations.com/)
 
