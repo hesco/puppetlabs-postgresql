@@ -35,10 +35,16 @@ class postgresql::server::ssl_certificate (
 
   file { "${datadir}/validate_self_signed_ssl_certificate.pl":
     source => 'puppet:///modules/postgresql/validate_self_signed_ssl_certificate.pl',
+      mode => '0775',
+     owner => 'postgres',
+     group => 'postgres',
   }
 
   file { "${datadir}/generate_self_signed_pg_server_certificate.sh":
     source => 'puppet:///modules/postgresql/generate_self_signed_pg_server_certificate.sh',
+      mode => '0775',
+     owner => 'postgres',
+     group => 'postgres',
   }
 
   exec { 'generate_self_signed_pg_server_certificate':
