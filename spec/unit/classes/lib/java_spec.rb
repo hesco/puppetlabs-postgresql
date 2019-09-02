@@ -6,15 +6,15 @@ describe 'postgresql::lib::java', type: :class do
       {
         osfamily: 'Debian',
         operatingsystem: 'Debian',
-        operatingsystemrelease: '6.0',
+        operatingsystemrelease: '8.0',
       }
     end
 
     it {
       is_expected.to contain_package('postgresql-jdbc').with(
-        name: 'libpg-java',
+        name: 'libpostgresql-jdbc-java',
         ensure: 'present',
-        tag: 'postgresql',
+        tag: 'puppetlabs-postgresql',
       )
     }
   end
@@ -32,7 +32,7 @@ describe 'postgresql::lib::java', type: :class do
       is_expected.to contain_package('postgresql-jdbc').with(
         name: 'postgresql-jdbc',
         ensure: 'present',
-        tag: 'postgresql',
+        tag: 'puppetlabs-postgresql',
       )
     }
     describe 'when parameters are supplied' do
@@ -44,7 +44,7 @@ describe 'postgresql::lib::java', type: :class do
         is_expected.to contain_package('postgresql-jdbc').with(
           name: 'somepackage',
           ensure: 'latest',
-          tag: 'postgresql',
+          tag: 'puppetlabs-postgresql',
         )
       }
     end

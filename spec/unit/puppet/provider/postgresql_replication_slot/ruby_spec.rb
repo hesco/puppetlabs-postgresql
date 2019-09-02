@@ -2,11 +2,13 @@ require 'spec_helper'
 
 type = Puppet::Type.type(:postgresql_replication_slot)
 describe type.provider(:ruby) do
+  # class SuccessStatus
   class SuccessStatus
     def success?
       true
     end
   end
+  # class FailStatus
   class FailStatus
     def success?
       false
@@ -27,11 +29,14 @@ def |        | physical  |        |          | t      |      |              | 0/
 
   context 'when listing instances' do
     before(:each) do
-      provider.class.expects(:run_command).with(['psql', '-t', '-c', 'SELECT * FROM pg_replication_slots;'], 'postgres', 'postgres').returns([sql_instances, nil])
+      expect(provider.class).to receive(:run_command).with( # rubocop:disable RSpec/ExpectInHook
+        ['psql', '-t', '-c', 'SELECT * FROM pg_replication_slots;'],
+        'postgres', 'postgres'
+      ).and_return([sql_instances, nil])
     end
     let(:attributes) { {} }
     let(:instances) { provider.class.instances }
-    let(:expected) { %w[abc def] }
+    let(:expected) { ['abc', 'def'] }
 
     it 'lists instances #size' do
       expect(instances.size).to eq 2
@@ -48,10 +53,10 @@ def |        | physical  |        |          | t      |      |              | 0/
 
     context 'when creation works' do
       it 'calls psql and succeed' do
-        provider.class.expects(:run_command).with(
+        expect(provider.class).to receive(:run_command).with(
           ['psql', '-t', '-c', "SELECT * FROM pg_create_physical_replication_slot('standby');"],
           'postgres', 'postgres'
-        ).returns([nil, success_status])
+        ).and_return([nil, success_status])
 
         expect { provider.create }.not_to raise_error
       end
@@ -59,10 +64,10 @@ def |        | physical  |        |          | t      |      |              | 0/
 
     context 'when creation fails' do
       it 'calls psql and fail' do
-        provider.class.expects(:run_command).with(
+        expect(provider.class).to receive(:run_command).with(
           ['psql', '-t', '-c', "SELECT * FROM pg_create_physical_replication_slot('standby');"],
           'postgres', 'postgres'
-        ).returns([nil, fail_status])
+        ).and_return([nil, fail_status])
 
         expect { provider.create }.to raise_error(Puppet::Error, %r{Failed to create replication slot standby:})
       end
@@ -74,10 +79,10 @@ def |        | physical  |        |          | t      |      |              | 0/
 
     context 'when destruction works' do
       it 'calls psql and succeed' do
-        provider.class.expects(:run_command).with(
+        expect(provider.class).to receive(:run_command).with(
           ['psql', '-t', '-c', "SELECT pg_drop_replication_slot('standby');"],
           'postgres', 'postgres'
-        ).returns([nil, success_status])
+        ).and_return([nil, success_status])
 
         expect { provider.destroy }.not_to raise_error
       end
@@ -85,10 +90,10 @@ def |        | physical  |        |          | t      |      |              | 0/
 
     context 'when destruction fails' do
       it 'calls psql and fail' do
-        provider.class.expects(:run_command).with(
+        expect(provider.class).to receive(:run_command).with(
           ['psql', '-t', '-c', "SELECT pg_drop_replication_slot('standby');"],
           'postgres', 'postgres'
-        ).returns([nil, fail_status])
+        ).and_return([nil, fail_status])
 
         expect { provider.destroy }.to raise_error(Puppet::Error, %r{Failed to destroy replication slot standby:})
       end

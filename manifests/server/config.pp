@@ -1,4 +1,4 @@
-# PRIVATE CLASS: do not call directly
+# @api private
 class postgresql::server::config {
   $ip_mask_deny_postgres_user = $postgresql::server::ip_mask_deny_postgres_user
   $ip_mask_allow_all_users    = $postgresql::server::ip_mask_allow_all_users
@@ -132,7 +132,7 @@ class postgresql::server::config {
 
   # RedHat-based systems hardcode some PG* variables in the init script, and need to be overriden
   # in /etc/sysconfig/pgsql/postgresql. Create a blank file so we can manage it with augeas later.
-  if ($::osfamily == 'RedHat') and ($::operatingsystemrelease !~ /^7/) and ($::operatingsystem != 'Fedora') {
+  if ($::osfamily == 'RedHat') and ($::operatingsystemrelease !~ /^7|^8/) and ($::operatingsystem != 'Fedora') {
     file { '/etc/sysconfig/pgsql/postgresql':
       ensure  => present,
       replace => false,
@@ -153,16 +153,6 @@ class postgresql::server::config {
 
   if ($manage_pg_ident_conf == true) {
     concat { $pg_ident_conf_path:
-      owner  => $user,
-      group  => $group,
-      mode   => '0640',
-      warn   => true,
-      notify => Class['postgresql::server::reload'],
-    }
-  }
-
-  if ($manage_recovery_conf == true) {
-    concat { $recovery_conf_path:
       owner  => $user,
       group  => $group,
       mode   => '0640',
