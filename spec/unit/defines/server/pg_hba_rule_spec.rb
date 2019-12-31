@@ -5,7 +5,7 @@ describe 'postgresql::server::pg_hba_rule', type: :define do
     {
       osfamily: 'Debian',
       operatingsystem: 'Debian',
-      operatingsystemrelease: '6.0',
+      operatingsystemrelease: '8.0',
       kernel: 'Linux',
       concat_basedir: tmpfilename('pg_hba'),
       id: 'root',
@@ -142,6 +142,95 @@ describe 'postgresql::server::pg_hba_rule', type: :define do
         is_expected.to contain_concat__fragment('pg_hba_rule_test').with(
           content: %r{local\s+all\s+all\s+0\.0\.0\.0\/0\s+scram-sha-256},
         )
+      end
+    end
+  end
+
+  context 'order' do
+    context 'default' do
+      let :pre_condition do
+        <<-MANIFEST
+          class { 'postgresql::server': }
+        MANIFEST
+      end
+
+      let :params do
+        {
+          type: 'local',
+          database: 'all',
+          user: 'all',
+          auth_method: 'ident',
+        }
+      end
+
+      it do
+        is_expected.to contain_concat__fragment('pg_hba_rule_test').with(order: '150')
+      end
+    end
+
+    context 'string' do
+      let :pre_condition do
+        <<-MANIFEST
+          class { 'postgresql::server': }
+        MANIFEST
+      end
+
+      let :params do
+        {
+          type: 'local',
+          database: 'all',
+          user: 'all',
+          auth_method: 'ident',
+          order: '12',
+        }
+      end
+
+      it do
+        is_expected.to contain_concat__fragment('pg_hba_rule_test').with(order: '12')
+      end
+    end
+
+    context 'short integer' do
+      let :pre_condition do
+        <<-MANIFEST
+          class { 'postgresql::server': }
+        MANIFEST
+      end
+
+      let :params do
+        {
+          type: 'local',
+          database: 'all',
+          user: 'all',
+          auth_method: 'ident',
+          order: 12,
+        }
+      end
+
+      it do
+        is_expected.to contain_concat__fragment('pg_hba_rule_test').with(order: '012')
+      end
+    end
+
+    context 'long integer' do
+      let :pre_condition do
+        <<-MANIFEST
+          class { 'postgresql::server': }
+        MANIFEST
+      end
+
+      let :params do
+        {
+          type: 'local',
+          database: 'all',
+          user: 'all',
+          auth_method: 'ident',
+          order: 1234,
+        }
+      end
+
+      it do
+        is_expected.to contain_concat__fragment('pg_hba_rule_test').with(order: '1234')
       end
     end
   end

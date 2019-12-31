@@ -9,7 +9,7 @@ describe 'postgresql::server::contrib', type: :class do
     {
       osfamily: 'Debian',
       operatingsystem: 'Debian',
-      operatingsystemrelease: '6.0',
+      operatingsystemrelease: '8.0',
       kernel: 'Linux',
       concat_basedir: tmpfilename('contrib'),
       id: 'root',
@@ -28,13 +28,13 @@ describe 'postgresql::server::contrib', type: :class do
     it 'creates package with correct params' do
       is_expected.to contain_package('postgresql-contrib').with(ensure: 'absent',
                                                                 name: 'mypackage',
-                                                                tag: 'postgresql')
+                                                                tag: 'puppetlabs-postgresql')
     end
   end
 
   describe 'with no parameters' do
     it 'creates package with postgresql tag' do
-      is_expected.to contain_package('postgresql-contrib').with(tag: 'postgresql')
+      is_expected.to contain_package('postgresql-contrib').with(tag: 'puppetlabs-postgresql')
     end
   end
 

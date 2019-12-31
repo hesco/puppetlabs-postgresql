@@ -5,7 +5,7 @@ describe 'postgresql::server::tablespace', type: :define do
     {
       osfamily: 'Debian',
       operatingsystem: 'Debian',
-      operatingsystemrelease: '6.0',
+      operatingsystemrelease: '8.0',
       kernel: 'Linux',
       concat_basedir: tmpfilename('tablespace'),
       id: 'root',
@@ -28,6 +28,7 @@ describe 'postgresql::server::tablespace', type: :define do
   end
 
   it { is_expected.to contain_postgresql__server__tablespace('test') }
+  it { is_expected.to contain_postgresql_psql('CREATE TABLESPACE "test"').that_requires('Class[postgresql::server::service]') }
 
   context 'with different owner' do
     let :params do

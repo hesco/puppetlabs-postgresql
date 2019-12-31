@@ -124,9 +124,9 @@ REASSIGN OWNEDを使用して、データベース内にあるすべてのオブ
 
 ```puppet
 postgresql::server::reassign_owned_by { 'new owner is meerkat':
-  db        => 'test_db',
-  old_owner => 'marmot',
-  new_owner => 'meerkat',
+  db       => 'test_db',
+  old_role => 'marmot',
+  new_role => 'meerkat',
 }
 ```
 
@@ -754,6 +754,12 @@ PostgreSQL Pythonパッケージの名前。
 
 #### postgresql::server
 
+##### `config_entries`
+
+`postgresql::server::config_entry` のリソースを構築するハッシュを指定します。
+
+デフォルト値: `{}`
+
 ##### `createdb_path`
 
 **非推奨** `createdb`コマンドへのパスを指定します。
@@ -894,6 +900,12 @@ pg_ident.confファイルを上書きします。
 
 `pg_hba.conf`ファイルへのパスを指定します。
 
+##### `pg_hba_rules`
+
+`postgresql::server::pg_hba_rule` のリソースを構築するハッシュを指定します。
+
+デフォルト値: `{}`
+
 ##### `pg_ident_conf_path`
 
 `pg_ident.conf`ファイルへのパスを指定します。
@@ -935,6 +947,12 @@ postgresユーザのパスワードを特定の値に設定します。デフォ
 `psql`コマンドへのパスを指定します。
 
 デフォルト値: OSによって異なります。
+
+##### `roles`
+
+`postgresql::server::role` のリソースを構築するハッシュを指定します。
+
+デフォルト値: `{}`
 
 ##### `service_manage`
 
@@ -1152,6 +1170,16 @@ PostgreSQLのCOMMENTコマンドを使用して、データベースについて
 
 データベース固有のパーミッションについて`postgresql::server::database_grant`をラッピングして、grantベースのユーザアクセス権を管理します。詳細については、[PostgreSQLマニュアルの`grant`](http://www.postgresql.org/docs/current/static/sql-grant.html)を参照してください。
 
+##### `ensure`
+
+権限を付与するか、無効化するかを指定します。無効化する'absent'はPostgreSQLバージョン9.1.24以降でのみ機能します。
+
+有効な値: 'present'、'absent'。
+* 権限を付与するには'present'を指定します。
+* 権限を無効化するには'absent'を指定します。
+
+デフォルト値: 'present'。
+
 #### `connect_settings`
 
 リモートサーバーへの接続時に使用する環境変数のハッシュを指定します。
@@ -1236,6 +1264,16 @@ PostgreSQL拡張を管理します。
 #### postgresql::server::grant
 
 ロールのgrantベースのアクセス権を管理します。詳細については、[PostgreSQLマニュアルの`grant`](http://www.postgresql.org/docs/current/static/sql-grant.html)を参照してください。
+
+##### `ensure`
+
+権限を付与するか、無効化するかを指定します。デフォルトでは権限を付与します。
+
+有効な値: 'present'、'absent'。
+* 権限を付与するには'present'を指定します。
+* 権限を無効化するには'absent'を指定します。
+
+デフォルト値: 'present'。
 
 ##### `db`
 
@@ -1362,6 +1400,12 @@ Array:  ['schema_name', 'object_name']
 
 `pg_hba.conf`にルールを配置する順序を設定します。
 
+文字列または整数を使用できます。
+整数の場合、ゼロパディングで3桁にして文字列に変換します。
+例えば`42`はゼロパディングされて文字列`'042'`になります。
+
+`pg_hba_rule`フラグメントのソートでは、[順序]を`alpha`に設定します(https://forge.puppet.com/puppetlabs/concat/reference#order)。
+
 デフォルト値: 150。
 
 #### `postgresql_version`
@@ -1463,6 +1507,8 @@ PostgreSQLコマンド'REASSIGN OWNED'をデータベースに対して実行し
 
 全パラメータリストの詳細な説明は、[PostgreSQLマニュアル](http://www.postgresql.org/docs/current/static/recovery-config.html)にあります。
 
+テンプレートでは、指定されたパラメータのみが認識されます。`recovery.conf`は、少なくとも1つのパラメータが設定済みで、**かつ**、[manage_recovery_conf](#manage_recovery_conf)がtrueの場合のみ作成されます。
+
 パラメータは、次の3つのセクションにグループ分けされています。
 
 ##### [アーカイブリカバリパラメータ](http://www.postgresql.org/docs/current/static/archive-recovery-settings.html)
@@ -1493,7 +1539,6 @@ PostgreSQLコマンド'REASSIGN OWNED'をデータベースに対して実行し
 **注意して使用してください。**
 
 #### postgresql::server::role
-
 PostgreSQLのロールまたはユーザを作成もしくは削除します。
 
 ##### `ensure`
@@ -1593,6 +1638,16 @@ postgresql::server::role { 'myusername':
 #### postgresql::server::table_grant
 
 ユーザのgrantベースのアクセス権を管理します。詳細については、PostgreSQLマニュアルの`grant`の項を参照してください。
+
+##### `ensure`
+
+権限を付与するか、無効化するかを指定します。デフォルトでは権限を付与します。
+
+有効な値: 'present'、'absent'。
+* 権限を付与するには'present'を指定します。
+* 権限を無効化するには'absent'を指定します。
+
+デフォルト値: 'present'。
 
 ##### `connect_settings`
 
@@ -1814,7 +1869,7 @@ Unixソケットとident認証を使用するとき、このユーザとして�
 
 接続するときに使用するポートを定義します。
 
-デフォルト値: '' 
+デフォルト値: ''
 
 ##### `run_as`
 
@@ -1848,23 +1903,19 @@ puppet apply --execute 'notify { 'test': message => postgresql_password('usernam
 
 ### タスク
 
-postgresqlモジュールの'sqlサンプルタスクは、データベースに対して任意のSQLを実行します。タスクの実行方法については、[Puppet Enterpriseマニュアル](https://puppet.com/docs/pe/2017.3/orchestrator/running_tasks.html)または[Boltマニュアル](https://puppet.com/docs/bolt/latest/bolt.html)を参照してください。
+Postgresqlモジュールにはサンプルタスクがあり、ユーザはデータベースに対して任意のSQLを実行できます。[PEマニュアル](https://puppet.com/docs/pe/2017.3/orchestrator/running_tasks.html)または[Boltマニュアル](https://puppet.com/docs/bolt/latest/bolt.html) で、タスクを実行する方法に関する情報を参照してください。
+
 
 ## 制約事項
 
 PostgreSQLのバージョン8.1～9.5で動作します。
 
-現在、postgresqlモジュールは次のオペレーティングシステムでテスト済みです。
-
-* Debian 6.x, 7.x, 8.x.
-* CentOS 5.x、6.x、7.x。
-* Ubuntu 10.04および12.04、14.04。
-
-その他のシステムとも互換性がある可能性がありますが、積極的なテストは行っておりません。
+サポートされているオペレーティングシステムの一覧については、[metadata.json](https://github.com/puppetlabs/puppetlabs-postgresql/blob/master/metadata.json)を参照してください。
 
 ### Aptモジュールのサポート
 
-このモジュールは1.xと2.x両方のバージョンの`puppetlabs-apt` モジュールをサポートしていますが、2.0.0と2.0.1の`puppetlabs-apt`はサポートしていません。
+このモジュールは1.xと2.x両方のバージョンの'puppetlabs-apt'モジュールをサポートしていますが、'puppetlabs-apt'の2.0.0と2.0.1はサポートしていません。
+
 
 ### PostGISのサポート
 

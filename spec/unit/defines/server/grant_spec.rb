@@ -5,7 +5,7 @@ describe 'postgresql::server::grant', type: :define do
     {
       osfamily: 'Debian',
       operatingsystem: 'Debian',
-      operatingsystemrelease: '6.0',
+      operatingsystemrelease: '8.0',
       kernel: 'Linux',
       concat_basedir: tmpfilename('contrib'),
       id: 'root',
@@ -169,7 +169,7 @@ describe 'postgresql::server::grant', type: :define do
         db: 'test',
         role: 'test',
         privilege: 'all',
-        object_name: %w[myschema mytable],
+        object_name: ['myschema', 'mytable'],
         object_type: 'table',
       }
     end
@@ -193,7 +193,7 @@ describe 'postgresql::server::grant', type: :define do
         db: 'test',
         role: 'test',
         privilege: 'all',
-        object_name: %w[myschema mytable],
+        object_name: ['myschema', 'mytable'],
         object_type: 'table',
       }
     end
@@ -210,7 +210,7 @@ describe 'postgresql::server::grant', type: :define do
     it { is_expected.to contain_postgresql__server__role('test') }
     it do
       is_expected.to contain_postgresql_psql('grant:test') \
-        .that_requires('Postgresql::Server::Role[test]')
+        .that_requires(['Class[postgresql::server::service]', 'Postgresql::Server::Role[test]'])
     end
   end
 
@@ -277,7 +277,7 @@ describe 'postgresql::server::grant', type: :define do
         db: 'test',
         role: 'test',
         privilege: 'all',
-        object_name: %w[myschema mytable oops],
+        object_name: ['myschema', 'mytable', 'oops'],
         object_type: 'table',
       }
     end

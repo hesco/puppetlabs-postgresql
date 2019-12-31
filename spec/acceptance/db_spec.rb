@@ -1,6 +1,6 @@
 require 'spec_helper_acceptance'
 
-describe 'postgresql::server::db', unless: UNSUPPORTED_PLATFORMS.include?(fact('osfamily')) do
+describe 'postgresql::server::db', unless: UNSUPPORTED_PLATFORMS.include?(os[:family]) do
   # rubocop:disable Metrics/LineLength
   it 'creates a database' do
     begin
@@ -20,8 +20,7 @@ describe 'postgresql::server::db', unless: UNSUPPORTED_PLATFORMS.include?(fact('
         }
       MANIFEST
 
-      apply_manifest(pp, catch_failures: true)
-      apply_manifest(pp, catch_changes: true)
+      idempotent_apply(default, pp)
 
       # Verify that the postgres password works
       shell("echo 'localhost:*:*:postgres:\'space password\'' > /root/.pgpass")
@@ -38,8 +37,8 @@ describe 'postgresql::server::db', unless: UNSUPPORTED_PLATFORMS.include?(fact('
       end
 
       result = shell('psql --version')
-      version = result.stdout.match(%r{\s(\d\.\d)})[1]
-      comment_information_function = if version > '8.1'
+      version = result.stdout.match(%r{\s(\d{1,2}\.\d)})[1]
+      comment_information_function = if version.to_f > 8.1
                                        'shobj_description'
                                      else
                                        'obj_description'

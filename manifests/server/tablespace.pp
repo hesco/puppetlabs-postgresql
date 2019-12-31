@@ -1,4 +1,9 @@
-# This module creates tablespace. See README.md for more details.
+# @summary This module creates tablespace. 
+#
+# @param location Specifies the path to locate this tablespace.
+# @param owner Specifies the default owner of the tablespace.
+# @param spcname Specifies the name of the tablespace.
+# @param connect_settings Specifies a hash of environment variables used when connecting to a remote server.
 define postgresql::server::tablespace(
   $location,
   $owner   = undef,
@@ -40,7 +45,7 @@ define postgresql::server::tablespace(
   postgresql_psql { "CREATE TABLESPACE \"${spcname}\"":
     command => "CREATE TABLESPACE \"${spcname}\" LOCATION '${location}'",
     unless  => "SELECT 1 FROM pg_tablespace WHERE spcname = '${spcname}'",
-    require => [Class['postgresql::server'], File[$location]],
+    require => File[$location],
   }
 
   if $owner {

@@ -1,8 +1,20 @@
-# Define for granting permissions to roles. See README.md for more details.
+# @summary Define for granting permissions to roles.
+#
+# @param role Specifies the role or user whom you are granting access to.
+# @param db Specifies the database to which you are granting access.
+# @param privilege Specifies the privilege to grant. Valid options: 'ALL', 'ALL PRIVILEGES' or 'object_type' dependent string.
+# @param object_type Specifies the type of object to which you are granting privileges. Valid options: 'DATABASE', 'SCHEMA', 'SEQUENCE', 'ALL SEQUENCES IN SCHEMA', 'TABLE' or 'ALL TABLES IN SCHEMA'.
+# @param object_name Specifies name of object_type to which to grant access, can be either a string or a two element array. String: 'object_name' Array: ['schema_name', 'object_name']
+# @param psql_db Specifies the database to execute the grant against. This should not ordinarily be changed from the default
+# @param psql_user Sets the OS user to run psql.
+# @param port Port to use when connecting.
+# @param onlyif_exists Create grant only if doesn't exist
+# @param connect_settings Specifies a hash of environment variables used when connecting to a remote server.
+# @param ensure Specifies whether to grant or revoke the privilege. Default is to grant the privilege. Valid values: 'present', 'absent'.
 define postgresql::server::grant (
   String $role,
   String $db,
-  Optional[String] $privilege      = undef,
+  String $privilege      = '',
   Pattern[#/(?i:^COLUMN$)/,
     /(?i:^ALL SEQUENCES IN SCHEMA$)/,
     /(?i:^ALL TABLES IN SCHEMA$)/,
@@ -187,7 +199,7 @@ define postgresql::server::grant (
                 SELECT DISTINCT
                        object_schema,
                        object_name,
-                       (regexp_split_to_array(regexp_replace(privs,E'/.*',''),'='))[1] AS grantee,
+                       regexp_replace((regexp_split_to_array(regexp_replace(privs,E'/.*',''),'='))[1],'\"','','g') AS grantee,
                        regexp_split_to_table((regexp_split_to_array(regexp_replace(privs,E'/.*',''),'='))[2],E'\\s*') AS privs_split
                   FROM (
                    SELECT n.nspname as object_schema,
@@ -221,7 +233,7 @@ define postgresql::server::grant (
                 SELECT DISTINCT
                        object_schema,
                        object_name,
-                       (regexp_split_to_array(regexp_replace(privs,E'/.*',''),'='))[1] AS grantee,
+                       regexp_replace((regexp_split_to_array(regexp_replace(privs,E'/.*',''),'='))[1],'\"','','g') AS grantee,
                        regexp_split_to_table((regexp_split_to_array(regexp_replace(privs,E'/.*',''),'='))[2],E'\\s*') AS privs_split
                   FROM (
                    SELECT n.nspname as object_schema,
@@ -248,6 +260,7 @@ define postgresql::server::grant (
           /^ALL$/,
           /^ALL PRIVILEGES$/,
           /^DELETE$/,
+          /^INSERT$/,
           /^REFERENCES$/,
           /^SELECT$/,
           /^TRIGGER$/,
@@ -413,7 +426,6 @@ define postgresql::server::grant (
     psql_path        => $psql_path,
     unless           => $_unless,
     onlyif           => $_onlyif,
-    require          => Class['postgresql::server']
   }
 
   if($role != undef and defined(Postgresql::Server::Role[$role])) {
