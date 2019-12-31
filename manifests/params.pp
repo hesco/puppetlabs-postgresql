@@ -24,6 +24,15 @@ class postgresql::params inherits postgresql::globals {
   $package_ensure             = 'present'
   $module_workdir             = pick($module_workdir,'/tmp')
 
+  # following required by postgresql::server::ssl_certificate
+  $cerificate_days          = postgresql::globals::certificate_days
+  $cerificate_country       = undef
+  $certificate_state        = undef
+  $certificate_locality     = undef
+  $certificate_organization = undef
+  $certificate_common_name  = undef
+  $certificate_email        = undef
+
   # Amazon Linux's OS Family is 'Linux', operating system 'Amazon'.
   case $::osfamily {
     'RedHat', 'Linux': {
