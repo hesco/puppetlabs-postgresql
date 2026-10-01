@@ -36,12 +36,12 @@ class postgresql::params inherits postgresql::globals {
 
   # following required by postgresql::server::ssl_certificate
   $cerificate_days          = postgresql::globals::certificate_days
-  $cerificate_country       = undef
-  $certificate_state        = undef
-  $certificate_locality     = undef
-  $certificate_organization = undef
-  $certificate_common_name  = undef
-  $certificate_email        = undef
+  $cerificate_country       = '' 
+  $certificate_state        = '' 
+  $certificate_locality     = '' 
+  $certificate_organization = '' 
+  $certificate_common_name  = '' 
+  $certificate_email        = '' 
 
   # Amazon Linux's OS Family is 'Linux', operating system 'Amazon'.
   case $facts['os']['family'] {
