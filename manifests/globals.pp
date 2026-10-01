@@ -165,8 +165,13 @@ class postgresql::globals (
   Optional[String[1]] $timezone                    = undef,
   Optional[Postgresql::Pg_password_encryption] $password_encryption = undef,
 
-  $certificate_common_name  = $facts['fqdn'],
-  $certificate_days         = 3650,
+  String $certificate_common_name    = lookup( 'postgresql::certificate_common_name', String, first, $facts['fqdn'] )
+  Integer $certificate_days          = lookup( 'postgresql::certificate_days', String, first, 365 )
+  String $certificate_country        = lookup( 'postgresql::cerificate_country', String, first, 'US' )
+  String $certificate_state          = lookup( 'postgresql::certificate_state', String, first, 'NE' )
+  String $certificate_locality       = lookup( 'postgresql::certificate_locality', String, first, 'Omaha' )
+  String $certificate_organization   = lookup( 'postgresql::certificate_organization', String, first, 'Acme, Inc.' )
+  String $certificate_email          = lookup( 'postgresql::certificate_email', String, first, 'admin@example.com' )
 
   Optional[Boolean] $manage_pg_hba_conf            = undef,
   Optional[Boolean] $manage_pg_ident_conf          = undef,

@@ -43,6 +43,14 @@ class postgresql::params inherits postgresql::globals {
   $certificate_common_name  = '' 
   $certificate_email        = '' 
 
+  Integer $certificate_days          = lookup( 'postgresql::certificate_days', String, first, 365 )
+  String $certificate_country        = lookup( 'postgresql::cerificate_country', String, first, 'US' )
+  String $certificate_state          = lookup( 'postgresql::certificate_state', String, first, 'NE' )
+  String $certificate_locality       = lookup( 'postgresql::certificate_locality', String, first, 'Omaha' )
+  String $certificate_organization   = lookup( 'postgresql::certificate_organization', String, first, 'Acme, Inc.' )
+  String $certificate_common_name    = lookup( 'postgresql::certificate_common_name', String, first, 'example.com' )
+  String $certificate_email          = lookup( 'postgresql::certificate_email', String, first, 'admin@example.com' )
+
   # Amazon Linux's OS Family is 'Linux', operating system 'Amazon'.
   case $facts['os']['family'] {
     'RedHat', 'Linux': {
