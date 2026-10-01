@@ -1,15 +1,17 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Puppet::Type.type(:postgresql_psql) do # rubocop:disable RSpec/MultipleDescribes
   context 'when validating attributes' do
     [:name, :unless, :db, :psql_path, :psql_user, :psql_group, :connect_settings].each do |attr|
-      it "should have a #{attr} parameter" do
+      it "has a #{attr} parameter" do
         expect(Puppet::Type.type(:postgresql_psql).attrtype(attr)).to eq(:param)
       end
     end
 
     [:command].each do |attr|
-      it "should have a #{attr} property" do
+      it "has a #{attr} property" do
         expect(Puppet::Type.type(:postgresql_psql).attrtype(attr)).to eq(:property)
       end
     end
@@ -34,7 +36,7 @@ describe Puppet::Type.type(:postgresql_psql), unless: Puppet.features.microsoft_
       refreshonly: :true,
       search_path: ['schema1', 'schema2'],
       connect_settings: { 'PGHOST' => 'postgres-db-server',
-                          'DBVERSION' => '9.1' },
+                          'DBVERSION' => '9.1' }
     }.each do |attr, value|
       context attr do
         describe [attr]
@@ -52,21 +54,25 @@ describe Puppet::Type.type(:postgresql_psql), unless: Puppet.features.microsoft_
 
       it { is_expected.to eq('psql') }
     end
+
     context 'default value: [:psql_user]' do
       subject { super()[:psql_user] }
 
       it { is_expected.to eq('postgres') }
     end
+
     context 'default value: [:psql_group]' do
       subject { super()[:psql_group] }
 
       it { is_expected.to eq('postgres') }
     end
+
     context 'default value: [:cwd]' do
       subject { super()[:cwd] }
 
       it { is_expected.to eq('/tmp') }
     end
+
     context 'default value: #refreshonly?' do
       subject { super().refreshonly? }
 
@@ -74,7 +80,6 @@ describe Puppet::Type.type(:postgresql_psql), unless: Puppet.features.microsoft_
     end
   end
 
-  # rubocop:disable RSpec/NamedSubject
   # rubocop:disable RSpec/SubjectStub
   describe '#command' do
     let(:attributes) { { command: 'SELECT stuff' } }
@@ -133,6 +138,7 @@ describe Puppet::Type.type(:postgresql_psql), unless: Puppet.features.microsoft_
         context 'not refreshing'
         it { expect(subject.should_run_sql).to be_falsey }
       end
+
       context "refreshonly => #{refreshonly.inspect}" do
         let(:attributes) do
           { refreshonly: refreshonly }
@@ -152,6 +158,7 @@ describe Puppet::Type.type(:postgresql_psql), unless: Puppet.features.microsoft_
         context 'not refreshing'
         it { expect(subject.should_run_sql).to be_truthy }
       end
+
       context "refreshonly => #{refreshonly.inspect}" do
         let(:attributes) do
           { refreshonly: refreshonly }
@@ -164,7 +171,7 @@ describe Puppet::Type.type(:postgresql_psql), unless: Puppet.features.microsoft_
   end
 
   describe "#should_run_sql with matching 'unless'" do
-    before(:each) { expect(subject.parameter(:unless)).to receive(:matches).with('SELECT something').and_return(true) } # rubocop:disable RSpec/ExpectInHook
+    before(:each) { expect(subject.parameter(:unless)).to receive(:matches).with('SELECT something').and_return(true) }
 
     [true, :true].each do |refreshonly|
       context "refreshonly => #{refreshonly.inspect}" do
@@ -175,6 +182,7 @@ describe Puppet::Type.type(:postgresql_psql), unless: Puppet.features.microsoft_
         context 'not refreshing'
         it { expect(subject.should_run_sql).to be_falsey }
       end
+
       context "refreshonly => #{refreshonly.inspect}" do
         let(:attributes) do
           { refreshonly: refreshonly, unless: 'SELECT something' }
@@ -194,6 +202,7 @@ describe Puppet::Type.type(:postgresql_psql), unless: Puppet.features.microsoft_
         context 'not refreshing'
         it { expect(subject.should_run_sql).to be_falsey }
       end
+
       context "refreshonly => #{refreshonly.inspect}" do
         let(:attributes) do
           { refreshonly: refreshonly, unless: 'SELECT something' }
@@ -206,7 +215,7 @@ describe Puppet::Type.type(:postgresql_psql), unless: Puppet.features.microsoft_
   end
 
   describe "#should_run_sql when not matching 'unless'" do
-    before(:each) { expect(subject.parameter(:unless)).to receive(:matches).with('SELECT something').and_return(false) } # rubocop:disable RSpec/ExpectInHook
+    before(:each) { expect(subject.parameter(:unless)).to receive(:matches).with('SELECT something').and_return(false) }
 
     [true, :true].each do |refreshonly|
       context "refreshonly => #{refreshonly.inspect}" do
@@ -217,6 +226,7 @@ describe Puppet::Type.type(:postgresql_psql), unless: Puppet.features.microsoft_
         context 'not refreshing'
         it { expect(subject.should_run_sql).to be_falsey }
       end
+
       context "refreshonly => #{refreshonly.inspect}" do
         let(:attributes) do
           { refreshonly: refreshonly, unless: 'SELECT something' }
@@ -236,6 +246,7 @@ describe Puppet::Type.type(:postgresql_psql), unless: Puppet.features.microsoft_
         context 'not refreshing'
         it { expect(subject.should_run_sql).to be_truthy }
       end
+
       context "refreshonly => #{refreshonly.inspect}" do
         let(:attributes) do
           { refreshonly: refreshonly, unless: 'SELECT something' }
@@ -263,3 +274,5 @@ describe Puppet::Type.type(:postgresql_psql), unless: Puppet.features.microsoft_
     end
   end
 end
+# rubocop:enable RSpec/NamedSubject
+# rubocop:enable RSpec/SubjectStub

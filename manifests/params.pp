@@ -1,28 +1,38 @@
 # @api private
 class postgresql::params inherits postgresql::globals {
-  $version                    = $postgresql::globals::globals_version
-  $postgis_version            = $postgresql::globals::globals_postgis_version
-  $listen_addresses           = undef
-  $port                       = 5432
-  $log_line_prefix            = undef
-  $ip_mask_deny_postgres_user = '0.0.0.0/0'
-  $ip_mask_allow_all_users    = '127.0.0.1/32'
-  $ipv4acls                   = []
-  $ipv6acls                   = []
-  $encoding                   = $postgresql::globals::encoding
-  $locale                     = $postgresql::globals::locale
-  $data_checksums             = $postgresql::globals::data_checksums
-  $timezone                   = $postgresql::globals::timezone
-  $service_ensure             = 'running'
-  $service_enable             = true
-  $service_manage             = true
-  $service_restart_on_change  = true
-  $service_provider           = $postgresql::globals::service_provider
-  $manage_pg_hba_conf         = pick($manage_pg_hba_conf, true)
-  $manage_pg_ident_conf       = pick($manage_pg_ident_conf, true)
-  $manage_recovery_conf       = pick($manage_recovery_conf, false)
-  $package_ensure             = 'present'
-  $module_workdir             = pick($module_workdir,'/tmp')
+  $version                      = $postgresql::globals::globals_version
+  $postgis_version              = $postgresql::globals::globals_postgis_version
+  $listen_addresses             = undef
+  $port                         = 5432
+  $log_line_prefix              = undef
+  $ip_mask_deny_postgres_user   = '0.0.0.0/0'
+  $ip_mask_allow_all_users      = '127.0.0.1/32'
+  $ipv4acls                     = []
+  $ipv6acls                     = []
+  $encoding                     = $postgresql::globals::encoding
+  $locale                       = $postgresql::globals::locale
+  $data_checksums               = $postgresql::globals::data_checksums
+  $timezone                     = $postgresql::globals::timezone
+  $service_ensure               = 'running'
+  $service_enable               = true
+  $service_manage               = true
+  $service_restart_on_change    = true
+  $service_provider             = $postgresql::globals::service_provider
+  $manage_pg_hba_conf           = pick($manage_pg_hba_conf, true)
+  $manage_pg_ident_conf         = pick($manage_pg_ident_conf, true)
+  $manage_recovery_conf         = pick($manage_recovery_conf, false)
+  $manage_postgresql_conf_perms = pick($manage_postgresql_conf_perms, true)
+  $manage_selinux               = pick($manage_selinux, false)
+  $package_ensure               = 'present'
+  $module_workdir               = pick($module_workdir,'/tmp')
+  $password_encryption          = pick($password_encryption, versioncmp($version, '14') ? { -1 => 'md5', default => 'scram-sha-256' })
+  $extra_systemd_config         = undef
+  $manage_datadir               = true
+  $manage_logdir                = true
+  $manage_xlogdir               = true
+
+  $backup_enable = false
+  $backup_provider = 'pg_dump'
 
   # following required by postgresql::server::ssl_certificate
   $cerificate_days          = postgresql::globals::certificate_days
@@ -34,7 +44,7 @@ class postgresql::params inherits postgresql::globals {
   $certificate_email        = undef
 
   # Amazon Linux's OS Family is 'Linux', operating system 'Amazon'.
-  case $::osfamily {
+  case $facts['os']['family'] {
     'RedHat', 'Linux': {
       $link_pg_config     = true
       $user               = pick($user, 'postgres')
@@ -43,7 +53,7 @@ class postgresql::params inherits postgresql::globals {
       $version_parts      = split($version, '[.]')
       $package_version    = "${version_parts[0]}${version_parts[1]}"
 
-      if $version == $postgresql::globals::default_version and $::operatingsystem != 'Amazon' {
+      if $version == $postgresql::globals::default_version and $facts['os']['name'] != 'Amazon' or $postgresql::globals::manage_dnf_module {
         $client_package_name    = pick($client_package_name, 'postgresql')
         $server_package_name    = pick($server_package_name, 'postgresql-server')
         $contrib_package_name   = pick($contrib_package_name,'postgresql-contrib')
@@ -54,7 +64,7 @@ class postgresql::params inherits postgresql::globals {
         $plpython_package_name  = pick($plpython_package_name, 'postgresql-plpython')
         $service_name           = pick($service_name, 'postgresql')
         $bindir                 = pick($bindir, '/usr/bin')
-        $datadir                = $::operatingsystem ? {
+        $datadir                = $facts['os']['name'] ? {
           'Amazon' => pick($datadir, "/var/lib/pgsql${package_version}/data"),
           default  => pick($datadir, '/var/lib/pgsql/data'),
         }
@@ -68,30 +78,37 @@ class postgresql::params inherits postgresql::globals {
         $docs_package_name      = pick($docs_package_name, "postgresql${package_version}-docs")
         $plperl_package_name    = pick($plperl_package_name, "postgresql${package_version}-plperl")
         $plpython_package_name  = pick($plpython_package_name, "postgresql${package_version}-plpython")
-        $service_name           = $::operatingsystem ? {
+        $service_name           = $facts['os']['name'] ? {
           'Amazon' => pick($service_name, "postgresql${version_parts[0]}${version_parts[1]}"),
           default  => pick($service_name, "postgresql-${version}"),
         }
-        $bindir                 = $::operatingsystem ? {
+        $bindir                 = $facts['os']['name'] ? {
           'Amazon' => pick($bindir, '/usr/bin'),
           default  => pick($bindir, "/usr/pgsql-${version}/bin"),
         }
-        $datadir                = $::operatingsystem ? {
+        $datadir                = $facts['os']['name'] ? {
           'Amazon' => pick($datadir, "/var/lib/pgsql${package_version}/data"),
           default  => pick($datadir, "/var/lib/pgsql/${version}/data"),
         }
         $confdir                = pick($confdir, $datadir)
+        $postgresql_conf_mode   = pick($postgresql_conf_mode, '0600')
       }
+
+      $service_reload = "systemctl reload ${service_name}"
+      $service_status = pick($service_status, "systemctl is-active --quiet ${service_name}")
+
       $psql_path           = pick($psql_path, "${bindir}/psql")
 
-      $service_status      = $service_status
-      $service_reload      = "service ${service_name} reload"
       $perl_package_name   = pick($perl_package_name, 'perl-DBD-Pg')
-      $python_package_name = pick($python_package_name, 'python-psycopg2')
+      if $facts['os']['family'] == 'RedHat' and versioncmp($facts['os']['release']['major'], '8') >= 0 {
+        $python_package_name = pick($python_package_name, 'python3-psycopg2')
+      } else {
+        $python_package_name = pick($python_package_name, 'python-psycopg2')
+      }
 
       if $postgresql::globals::postgis_package_name {
         $postgis_package_name = $postgresql::globals::postgis_package_name
-      } elsif $::operatingsystemrelease =~ /^5\./ {
+      } elsif $facts['os']['name'] == 'Fedora' {
         $postgis_package_name = 'postgis'
       } elsif $postgis_version and versioncmp($postgis_version, '2') < 0 {
         $postgis_package_name = "postgis${package_version}"
@@ -108,13 +125,11 @@ class postgresql::params inherits postgresql::globals {
 
       # Archlinux doesn't have a client-package but has a libs package which
       # pulls in postgresql server
-      $client_package_name    = pick($client_package_name, 'postgresql')
-      $server_package_name    = pick($server_package_name, 'postgresql-libs')
+      $client_package_name    = pick($client_package_name, 'postgresql-libs')
+      $server_package_name    = pick($server_package_name, 'postgresql')
       $java_package_name      = pick($java_package_name, 'postgresql-jdbc')
       # Archlinux doesn't have develop packages
       $devel_package_name     = pick($devel_package_name, 'postgresql-devel')
-      # Archlinux does have postgresql-contrib but it isn't maintained
-      $contrib_package_name   = pick($contrib_package_name,'undef')
       # Archlinux postgresql package provides plperl
       $plperl_package_name    = pick($plperl_package_name, 'undef')
       $plpython_package_name  = pick($plpython_package_name, 'undef')
@@ -124,7 +139,7 @@ class postgresql::params inherits postgresql::globals {
       $confdir                = pick($confdir, $datadir)
       $psql_path              = pick($psql_path, "${bindir}/psql")
 
-      $service_status         = $service_status
+      $service_status         = pick($service_status, "systemctl is-active --quiet ${service_name}")
       $service_reload         = "systemctl reload ${service_name}"
       $python_package_name    = pick($python_package_name, 'python-psycopg2')
       # Archlinux does not have a perl::DBD::Pg package
@@ -136,56 +151,40 @@ class postgresql::params inherits postgresql::globals {
       $user               = pick($user, 'postgres')
       $group              = pick($group, 'postgres')
 
-      if $postgresql::globals::manage_package_repo == true {
-        $needs_initdb = pick($needs_initdb, true)
-        $service_name = pick($service_name, 'postgresql')
-      } else {
-        $needs_initdb = pick($needs_initdb, false)
-        $service_name = $::operatingsystem ? {
-          'Debian' => pick($service_name, 'postgresql'),
-          'Ubuntu' => $::lsbmajdistrelease ? {
-            /^10/ => pick($service_name, "postgresql-${version}"),
-            default => pick($service_name, 'postgresql'),
-          },
-          default => undef
-        }
-      }
+      $needs_initdb = pick($needs_initdb, $postgresql::globals::manage_package_repo == true)
+      $service_name = pick($service_name, 'postgresql')
 
       $client_package_name    = pick($client_package_name, "postgresql-client-${version}")
       $server_package_name    = pick($server_package_name, "postgresql-${version}")
-      $contrib_package_name   = pick($contrib_package_name, "postgresql-contrib-${version}")
       if $postgis_version and versioncmp($postgis_version, '2') < 0 {
         $postgis_package_name = pick($postgis_package_name, "postgresql-${version}-postgis")
+      } elsif $postgis_version and versioncmp($postgis_version, '3') >= 0 {
+        $postgis_package_name = pick($postgis_package_name, "postgresql-${version}-postgis-3")
       } else {
         $postgis_package_name = pick($postgis_package_name, "postgresql-${version}-postgis-${postgis_version}")
       }
       $devel_package_name     = pick($devel_package_name, 'libpq-dev')
-      $java_package_name = $::operatingsystem ? {
-        'Debian' => $::operatingsystemrelease ? {
-          /^6/    => pick($java_package_name, 'libpg-java'),
-          default => pick($java_package_name, 'libpostgresql-jdbc-java'),
-        },
-      default  => pick($java_package_name, 'libpostgresql-jdbc-java'),
-      }
+      $java_package_name      = pick($java_package_name, 'libpostgresql-jdbc-java')
       $perl_package_name      = pick($perl_package_name, 'libdbd-pg-perl')
       $plperl_package_name    = pick($plperl_package_name, "postgresql-plperl-${version}")
       $plpython_package_name  = pick($plpython_package_name, "postgresql-plpython-${version}")
-      $python_package_name    = pick($python_package_name, 'python-psycopg2')
+
+      $_ubuntu_2204 = ($facts['os']['name'] == 'Ubuntu' and versioncmp($facts['os']['release']['full'], '22.04') >= 0)
+      $_debian_11 = ($facts['os']['name'] == 'Debian' and versioncmp($facts['os']['release']['full'], '11') >= 0)
+
+      if $_ubuntu_2204 or $_debian_11 {
+        $python_package_name = pick($python_package_name, 'python3-psycopg2')
+      } else {
+        $python_package_name = pick($python_package_name, 'python-psycopg2')
+      }
 
       $bindir                 = pick($bindir, "/usr/lib/postgresql/${version}/bin")
       $datadir                = pick($datadir, "/var/lib/postgresql/${version}/main")
       $confdir                = pick($confdir, "/etc/postgresql/${version}/main")
-      if $::operatingsystem == 'Debian' and versioncmp($::operatingsystemrelease, '8.0') >= 0 {
-        # Jessie uses systemd
-        $service_status = pick($service_status, "/usr/sbin/service ${service_name}@*-main status")
-      } elsif $::operatingsystem == 'Ubuntu' and versioncmp($::operatingsystemrelease, '15.04') >= 0 {
-        # Ubuntu releases since vivid use systemd
-        $service_status = pick($service_status, "/usr/sbin/service ${service_name} status")
-      } else {
-        $service_status = pick($service_status, "/etc/init.d/${service_name} status | /bin/egrep -q 'Running clusters: .+|online'")
-      }
-      $service_reload         = "service ${service_name} reload"
+      $service_reload         = "systemctl reload ${service_name}"
+      $service_status         = pick($service_status, "systemctl is-active --quiet ${service_name}")
       $psql_path              = pick($psql_path, '/usr/bin/psql')
+      $postgresql_conf_mode   = pick($postgresql_conf_mode, '0644')
     }
 
     'Gentoo': {
@@ -194,7 +193,6 @@ class postgresql::params inherits postgresql::globals {
 
       $client_package_name  = pick($client_package_name, 'UNSET')
       $server_package_name  = pick($server_package_name, 'postgresql')
-      $contrib_package_name = pick_default($contrib_package_name, undef)
       $devel_package_name   = pick_default($devel_package_name, undef)
       $java_package_name    = pick($java_package_name, 'jdbc-postgresql')
       $perl_package_name    = pick($perl_package_name, 'DBD-Pg')
@@ -205,7 +203,7 @@ class postgresql::params inherits postgresql::globals {
       $bindir               = pick($bindir, "/usr/lib/postgresql-${version}/bin")
       $datadir              = pick($datadir, "/var/lib/postgresql/${version}_data")
       $confdir              = pick($confdir, "/etc/postgresql-${version}")
-      $service_status       = pick($service_status, "systemctl status ${service_name}")
+      $service_status       = pick($service_status, "systemctl is-active --quiet ${service_name}")
       $service_reload       = "systemctl reload ${service_name}"
       $psql_path            = pick($psql_path, "${bindir}/psql")
 
@@ -213,19 +211,9 @@ class postgresql::params inherits postgresql::globals {
     }
 
     'FreeBSD': {
-      case $version {
-        '94', '95': {
-          $user                 = pick($user, 'pgsql')
-          $group                = pick($group, 'pgsql')
-          $datadir              = pick($datadir, '/usr/local/pgsql/data')
-        }
-        default: {
-          $user                 = pick($user, 'postgres')
-          $group                = pick($group, 'postgres')
-          $datadir              = pick($datadir, "/var/db/postgres/data${version}")
-        }
-      }
-
+      $user                 = pick($user, 'postgres')
+      $group                = pick($group, 'postgres')
+      $datadir              = pick($datadir, "/var/db/postgres/data${version}")
       $link_pg_config       = true
       $client_package_name  = pick($client_package_name, "databases/postgresql${version}-client")
       $server_package_name  = pick($server_package_name, "databases/postgresql${version}-server")
@@ -288,13 +276,8 @@ class postgresql::params inherits postgresql::globals {
       $bindir               = pick($bindir, "/usr/lib/postgresql${version}/bin")
       $datadir              = pick($datadir, '/var/lib/pgsql/data')
       $confdir              = pick($confdir, $datadir)
-      if $::operatingsystem == 'SLES' and versioncmp($::operatingsystemrelease, '11.4') <= 0 {
-        $service_status     = pick($service_status, "/etc/init.d/${service_name} status")
-        $service_reload     = "/etc/init.d/${service_name} reload"
-      } else {
-        $service_status     = pick($service_status, "systemctl status ${service_name}")
-        $service_reload     = "systemctl reload ${service_name}"
-      }
+      $service_status       = pick($service_status, "systemctl is-active --quiet ${service_name}")
+      $service_reload       = "systemctl reload ${service_name}"
       $psql_path            = pick($psql_path, "${bindir}/psql")
 
       $needs_initdb         = pick($needs_initdb, true)
@@ -307,7 +290,7 @@ class postgresql::params inherits postgresql::globals {
       # Since we can't determine defaults on our own, we rely on users setting
       # parameters with the postgresql::globals class. Here we are checking
       # that the mandatory minimum is set for the module to operate.
-      $err_prefix = "Module ${module_name} does not provide defaults for osfamily: ${::osfamily} operatingsystem: ${::operatingsystem}; please specify a value for ${module_name}::globals::"
+      $err_prefix = "Module ${module_name} does not provide defaults for osfamily: ${facts['os']['family']} operatingsystem: ${facts['os']['name']}; please specify a value for ${module_name}::globals::" # lint:ignore:140chars
       if ($needs_initdb == undef) { fail("${err_prefix}needs_initdb") }
       if ($service_name == undef) { fail("${err_prefix}service_name") }
       if ($client_package_name == undef) { fail("${err_prefix}client_package_name") }

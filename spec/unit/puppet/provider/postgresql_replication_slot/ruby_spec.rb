@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 type = Puppet::Type.type(:postgresql_replication_slot)
@@ -8,6 +10,7 @@ describe type.provider(:ruby) do
       true
     end
   end
+
   # class FailStatus
   class FailStatus
     def success?
@@ -29,11 +32,12 @@ def |        | physical  |        |          | t      |      |              | 0/
 
   context 'when listing instances' do
     before(:each) do
-      expect(provider.class).to receive(:run_command).with( # rubocop:disable RSpec/ExpectInHook
+      expect(provider.class).to receive(:run_command).with(
         ['psql', '-t', '-c', 'SELECT * FROM pg_replication_slots;'],
         'postgres', 'postgres'
       ).and_return([sql_instances, nil])
     end
+
     let(:attributes) { {} }
     let(:instances) { provider.class.instances }
     let(:expected) { ['abc', 'def'] }
@@ -41,6 +45,7 @@ def |        | physical  |        |          | t      |      |              | 0/
     it 'lists instances #size' do
       expect(instances.size).to eq 2
     end
+
     it 'lists instances #content' do
       expected.each_with_index do |expect, index|
         expect(instances[index].name).to eq expect

@@ -8,6 +8,7 @@
     * [Getting started with postgresql](#getting-started-with-postgresql)
 3. [Usage - Configuration options and additional functionality](#usage)
     * [Configure a server](#configure-a-server)
+    * [Configure an instance](#configure-an-instance)
     * [Create a database](#create-a-database)
     * [Manage users, roles, and permissions](#manage-users-roles-and-permissions)
     * [Manage ownership of DB objects](#manage-ownership-of-db-objects)
@@ -15,12 +16,14 @@
     * [Create an access rule for pg_hba.conf](#create-an-access-rule-for-pg_hbaconf)
     * [Create user name maps for pg_ident.conf](#create-user-name-maps-for-pg_identconf)
     * [Validate connectivity](#validate-connectivity)
+    * [Backups](#backups)
 4. [Reference - An under-the-hood peek at what the module is doing and how](#reference)
 5. [Limitations - OS compatibility, etc.](#limitations)
-6. [Development - Guide for contributing to the module](#development)
+6. [License](#license)
+7. [Development - Guide for contributing to the module](#development)
     * [Contributors - List of module contributors](#contributors)
-7. [Tests](#tests)
-8. [Contributors - List of module contributors](#contributors)
+8. [Tests](#tests)
+9. [Contributors - List of module contributors](#contributors)
 
 ## Module description
 
@@ -71,6 +74,220 @@ If you get an error message from these commands, your permission settings restri
 
 For more details about server configuration parameters, consult the [PostgreSQL Runtime Configuration documentation](http://www.postgresql.org/docs/current/static/runtime-config.html).
 
+#### Selecting a version
+
+The version is intended to be supplied via `postgresql::globals`.
+By default the module tries to derive the version based on the OS facts, but can be overridden.
+This is typically used with the official postgresql.org packages:
+
+```puppet
+class { 'postgresql::globals':
+  manage_package_repo => true,
+  version             => '16',
+}
+
+include postgresql::server
+```
+
+On EL 8 & 9 you can also use DNF modules:
+
+```puppet
+class { 'postgresql::globals':
+  manage_dnf_module => true,
+  version           => '16',
+}
+
+include postgresql::server
+```
+
+If you manage the repositories yourself, overriding the version is sufficient.
+
+```puppet
+class { 'postgresql::globals':
+  version => '16',
+}
+
+include postgresql::server
+```
+
+### Configure an instance
+
+This module supports managing multiple instances (the default instance is referred to as 'main' and managed via including the server.pp class)
+
+**NOTE:** This feature is currently tested on CentOS 8 Streams/RHEL8 with DNF Modules enabled. Different Linux platforms and/or the postgresql.org
+packages distribute different systemd service files or use wrapper scripts with systemd to start PostgreSQL. Additional adjustmentments are needed to get this working on these platforms.
+
+#### Working Platforms
+
+* Centos 8 Streams
+* RHEL 8
+
+#### Background and example
+
+creating a new instance has the following advantages:
+* files are owned by the postgres user
+* instance is running under a different user, if the instance is hacked, the hacker has no access to the file system
+* the instance user can be an LDAP user, higher security because of central login monitoring, password policies, password rotation policies
+* main instance can be disabled
+
+
+Here is a profile which can be used to create instances
+
+```puppet
+class profiles::postgres (
+  Hash $instances = {},
+  String $postgresql_version = '13',
+) {
+  class { 'postgresql::globals':
+    encoding            => 'UTF-8',
+    locale              => 'en_US.UTF-8',
+    manage_package_repo => false,
+    manage_dnf_module   => true,
+    needs_initdb        => true,
+    version             => $postgresql_version,
+  }
+  include postgresql::server
+
+  $instances.each |String $instance, Hash $instance_settings| {
+    postgresql::server_instance { $instance:
+      *               => $instance_settings,
+    }
+  }
+}
+```
+
+And here is data to create an instance called test1:
+
+```yaml
+# stop default main instance
+postgresql::server::service_ensure: "stopped"
+postgresql::server::service_enable: false
+
+#define an instance
+profiles::postgres::instances:
+  test1:
+    instance_user: "ins_test1"
+    instance_group: "ins_test1"
+    instance_directories:
+      "/opt/pgsql":
+        ensure: directory
+      "/opt/pgsql/backup":
+        ensure: directory
+      "/opt/pgsql/data":
+        ensure: directory
+      "/opt/pgsql/data/13":
+        ensure: directory
+      "/opt/pgsql/data/home":
+        ensure: directory
+      "/opt/pgsql/wal":
+        ensure: directory
+      "/opt/pgsql/log":
+        ensure: directory
+      "/opt/pgsql/log/13":
+        ensure: directory
+      "/opt/pgsql/log/13/test1":
+        ensure: directory
+    config_settings:
+      pg_hba_conf_path: "/opt/pgsql/data/13/test1/pg_hba.conf"
+      postgresql_conf_path: "/opt/pgsql/data/13/test1/postgresql.conf"
+      pg_ident_conf_path: "/opt/pgsql/data/13/test1/pg_ident.conf"
+      datadir: "/opt/pgsql/data/13/test1"
+      service_name: "postgresql@13-test1"
+      port: 5433
+      pg_hba_conf_defaults: false
+    service_settings:
+      service_name: "postgresql@13-test1"
+      service_status: "systemctl status postgresql@13-test1.service"
+      service_ensure: "running"
+      service_enable: true
+    initdb_settings:
+      auth_local: "peer"
+      auth_host: "md5"
+      needs_initdb: true
+      datadir: "/opt/pgsql/data/13/test1"
+      encoding: "UTF-8"
+      lc_messages: "en_US.UTF8"
+      locale: "en_US.UTF8"
+      data_checksums: false
+      group: "postgres"
+      user: "postgres"
+      username: "ins_test1"
+    config_entries:
+      authentication_timeout:
+        value: "1min"
+        comment: "a test"
+      log_statement_stats:
+        value: "off"
+      autovacuum_vacuum_scale_factor:
+        value: 0.3
+    databases:
+      testdb1:
+        encoding: "UTF8"
+        locale: "en_US.UTF8"
+        owner: "dba_test1"
+      testdb2:
+        encoding: "UTF8"
+        locale: "en_US.UTF8"
+        owner: "dba_test1"
+    roles:
+      "ins_test1":
+        superuser: true
+        login: true
+      "dba_test1":
+        createdb: true
+        login: true
+      "app_test1":
+        login: true
+      "rep_test1":
+        replication: true
+        login: true
+      "rou_test1":
+        login: true
+    pg_hba_rules:
+      "local all INSTANCE user":
+        type: "local"
+        database: "all"
+        user: "ins_test1"
+        auth_method: "peer"
+        order: 1
+      "local all DB user":
+        type: "local"
+        database: "all"
+        user: "dba_test1"
+        auth_method: "peer"
+        order: 2
+      "local all APP user":
+        type: "local"
+        database: "all"
+        user: "app_test1"
+        auth_method: "peer"
+        order: 3
+      "local all READONLY user":
+        type: "local"
+        database: "all"
+        user: "rou_test1"
+        auth_method: "peer"
+        order: 4
+      "remote all INSTANCE user PGADMIN server":
+        type: "host"
+        database: "all"
+        user: "ins_test1"
+        address: "192.168.22.131/32"
+        auth_method: "md5"
+        order: 5
+      "local replication INSTANCE user":
+        type: "local"
+        database: "replication"
+        user: "ins_test1"
+        auth_method: "peer"
+        order: 6
+      "local replication REPLICATION user":
+        type: "local"
+        database: "replication"
+        user: "rep_test1"
+        auth_method: "peer"
+        order: 7
+```
 ### Create a database
 
 You can set up a variety of PostgreSQL databases with the `postgresql::server::db` defined type. For instance, to set up a database for PuppetDB:
@@ -81,7 +298,7 @@ class { 'postgresql::server':
 
 postgresql::server::db { 'mydatabasename':
   user     => 'mydatabaseuser',
-  password => postgresql_password('mydatabaseuser', 'mypassword'),
+  password => postgresql::postgresql_password('mydatabaseuser', 'mypassword'),
 }
 ```
 
@@ -94,7 +311,7 @@ class { 'postgresql::server':
 }
 
 postgresql::server::role { 'marmot':
-  password_hash => postgresql_password('marmot', 'mypasswd'),
+  password_hash => postgresql::postgresql_password('marmot', 'mypasswd'),
 }
 
 postgresql::server::database_grant { 'test1':
@@ -131,6 +348,19 @@ This applies to objects within the nominated database, 'test_db' only.
 
 For Postgresql >= 9.3, the ownership of the database is also updated.
 
+### Manage default permissions (PostgreSQL >= 9.6)
+
+To change default permissions for newly created objects using ALTER DEFAULT PRIVILEGES:
+
+```puppet
+postgresql::server::default_privileges { 'marmot access to new tables on test_db':
+  db          => 'test_db',
+  role        => 'marmot',
+  privilege   => 'ALL',
+  object_type => 'TABLES',
+}
+```
+
 ### Override defaults
 
 The `postgresql::globals` class allows you to configure the main settings for this module globally, so that other classes and defined resources can use them. By itself, it does nothing.
@@ -147,25 +377,17 @@ class { 'postgresql::server':
 }
 ```
 
-To use a specific version of the PostgreSQL package:
-
-```puppet
-class { 'postgresql::globals':
-  manage_package_repo => true,
-  version             => '9.2',
-}
-
-class { 'postgresql::server':
-}
-```
-
 ### Manage remote users, roles, and permissions
 
-Remote SQL objects are managed using the same Puppet resources as local SQL objects, along with a [`connect_settings`](#connect_settings) hash. This provides control over how Puppet connects to the remote Postgres instances and which version is used for generating SQL commands.
+Remote SQL objects are managed using the same Puppet resources as local SQL objects, along with a `$connect_settings` hash. This provides control over how Puppet connects to the remote Postgres instances and which version is used for generating SQL commands.
 
-The `connect_settings` hash can contain environment variables to control Postgres client connections, such as 'PGHOST', 'PGPORT', 'PGPASSWORD', and 'PGSSLKEY'. See the [PostgreSQL Environment Variables](http://www.postgresql.org/docs/9.4/static/libpq-envars.html)  documentation for a complete list of variables.
+The `connect_settings` hash can contain environment variables to control Postgres client connections, such as 'PGHOST', 'PGPORT', 'PGPASSWORD', 'PGUSER' and 'PGSSLKEY'. See the [PostgreSQL Environment Variables](https://www.postgresql.org/docs/current/libpq-envars.html)  documentation for a complete list of variables.
 
-Additionally, you can specify the target database version with the special value of 'DBVERSION'. If the `connect_settings` hash is omitted or empty, then Puppet connects to the local PostgreSQL instance.
+Additionally, you can specify the target database version with the special value of 'DBVERSION'. If the `$connect_settings` hash is omitted or empty, then Puppet connects to the local PostgreSQL instance.
+
+**The $connect_settings hash has priority over the explicit variables like $port and $user**
+
+When a user provides only the `$port` parameter to a resource and no `$connect_settings`, `$port` will be used. When `$connect_settings` contains `PGPORT` and `$port` is set, `$connect_settings['PGPORT']` will be used.
 
 You can provide a `connect_settings` hash for each of the Puppet resources, or you can set a default `connect_settings` hash in `postgresql::globals`. Configuring `connect_settings` per resource allows SQL objects to be created on multiple databases by multiple users.
 
@@ -308,11 +530,32 @@ postgresql_conn_validator { 'validate my postgres connection':
   db_username       => 'mydbuser',
   db_password       => 'mydbpassword',
   db_name           => 'mydbname',
-}->
-exec { 'rake db:migrate':
+  psql_path         => '/usr/bin/psql',
+}
+-> exec { 'rake db:migrate':
   cwd => '/opt/myrubyapp',
 }
 ```
+
+### Backups
+
+This example demonstrates how to configure PostgreSQL backups with "pg_dump". This sets up a daily cron job to perform a full backup. Each backup will create a new directory. A cleanup job will automatically remove backups that are older than 15 days.
+
+```
+class { 'postgresql::server':
+  backup_enable   => true,
+  backup_provider => 'pg_dump',
+  backup_options  => {
+    db_user     => 'backupuser',
+    db_password => 'secret',
+    manage_user => true,
+    rotate      => 15,
+  },
+  ...
+}
+```
+
+It is possible to set parameter `$ensure` to `absent` in order to remove the backup job, user/role, backup script and password file. However, the actual backup files and directories will remain untouched.
 
 ## Reference
 
@@ -1916,9 +2159,9 @@ For information on the classes and types, see the [REFERENCE.md](https://github.
 
 ## Limitations
 
-Works with versions of PostgreSQL from 8.1 through 9.5.
+Works with versions of PostgreSQL on supported OSes.
 
-For an extensive list of supported operating systems, see [metadata.json](https://github.com/puppetlabs/puppetlabs-postgresql/blob/master/metadata.json)
+For an extensive list of supported operating systems, see [metadata.json](https://github.com/puppetlabs/puppetlabs-postgresql/blob/main/metadata.json)
 
 ### Apt module support
 
@@ -1929,17 +2172,21 @@ While this module supports both 1.x and 2.x versions of the 'puppetlabs-apt' mod
 
 PostGIS is currently considered an unsupported feature, as it doesn't work on all platforms correctly.
 
-### All versions of RHEL/CentOS
+### All versions of RHEL/CentOS with manage_selinux => false
 
-If you have SELinux enabled you must add any custom ports you use to the `postgresql_port_t` context.  You can do this as follows:
+If you have SELinux enabled and you are *not* using the selinux module to manage SELinux (this is the default configuration) you will need to label any custom ports you use with the `postgresql_port_t` context.  The postgresql service will not start until this is done.  To label a port use the semanage command as follows:
 
 ```shell
 semanage port -a -t postgresql_port_t -p tcp $customport
 ```
 
+## License
+
+This codebase is licensed under the Apache2.0 licensing, however due to the nature of the codebase the open source dependencies may also use a combination of [AGPL](https://opensource.org/license/agpl-v3/), [BSD-2](https://opensource.org/license/bsd-2-clause/), [BSD-3](https://opensource.org/license/bsd-3-clause/), [GPL2.0](https://opensource.org/license/gpl-2-0/), [LGPL](https://opensource.org/license/lgpl-3-0/), [MIT](https://opensource.org/license/mit/) and [MPL](https://opensource.org/license/mpl-2-0/) Licensing.
+
 ## Development
 
-Puppet Labs modules on the Puppet Forge are open projects, and community contributions are essential for keeping them great. We can’t access the huge number of platforms and myriad hardware, software, and deployment configurations that Puppet is intended to serve. We want to keep it as easy as possible to contribute changes so that our modules work in your environment. There are a few guidelines that we need contributors to follow so that we can have a chance of keeping on top of things. For more information, see our [module contribution guide](https://docs.puppetlabs.com/forge/contributing.html).
+Puppet Labs modules on the Puppet Forge are open projects, and community contributions are essential for keeping them great. We can’t access the huge number of platforms and myriad hardware, software, and deployment configurations that Puppet is intended to serve. We want to keep it as easy as possible to contribute changes so that our modules work in your environment. There are a few guidelines that we need contributors to follow so that we can have a chance of keeping on top of things. For more information, see our [module contribution guide](https://puppet.com/docs/puppet/latest/contributing.html).
 
 ### Tests
 
@@ -1961,8 +2208,6 @@ And then run the unit tests:
 ```shell
 bundle exec rake spec
 ```
-
-The unit tests are run in Travis-CI as well. If you want to see the results of your own tests, register the service hook through Travis-CI via the accounts section for your GitHub clone of this project.
 
 To run the system tests, make sure you also have:
 

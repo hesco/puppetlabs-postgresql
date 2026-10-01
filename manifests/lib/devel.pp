@@ -1,20 +1,20 @@
-# @summary This class installs postgresql development libraries. 
+# @summary This class installs postgresql development libraries.
 #
 # @param package_name
 #   Override devel package name
 # @param package_ensure
 #   Ensure the development libraries are installed
 # @param link_pg_config
-#   If the bin directory used by the PostgreSQL page is not /usr/bin or /usr/local/bin, symlinks pg_config from the package's bin dir into usr/bin (not applicable to Debian systems). Set to false to disable this behavior.
+#   If the bin directory used by the PostgreSQL page is not /usr/bin or /usr/local/bin, symlinks pg_config from the package's bin dir
+#   into usr/bin (not applicable to Debian systems). Set to false to disable this behavior.
 #
 #
-class postgresql::lib::devel(
-  String $package_name      = $postgresql::params::devel_package_name,
-  String[1] $package_ensure = 'present',
-  Boolean $link_pg_config   = $postgresql::params::link_pg_config
+class postgresql::lib::devel (
+  Variant[Enum['present', 'absent', 'purged', 'disabled', 'installed', 'latest'], String[1]] $package_ensure = 'present',
+  String $package_name    = $postgresql::params::devel_package_name,
+  Boolean $link_pg_config = $postgresql::params::link_pg_config,
 ) inherits postgresql::params {
-
-  if $::osfamily == 'Gentoo' {
+  if $facts['os']['family'] == 'Gentoo' {
     fail('osfamily Gentoo does not have a separate "devel" package, postgresql::lib::devel is not supported')
   }
 
@@ -32,5 +32,4 @@ class postgresql::lib::devel(
       }
     }
   }
-
 }

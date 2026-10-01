@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Puppet::Type.type(:postgresql_replication_slot) do
@@ -6,6 +8,6 @@ describe Puppet::Type.type(:postgresql_replication_slot) do
   end
 
   it 'has a name parameter' do
-    expect(subject[:name]).to eq 'standby' # rubocop:disable RSpec/NamedSubject
+    expect(subject[:name]).to eq 'standby'
   end
 end

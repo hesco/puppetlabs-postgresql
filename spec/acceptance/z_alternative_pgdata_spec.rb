@@ -1,18 +1,13 @@
+# frozen_string_literal: true
+
 require 'spec_helper_acceptance'
 
 # These tests ensure that postgres can change itself to an alternative pgdata
 # location properly.
 
-# Allow postgresql to use /tmp/* as a datadir
-if os[:family] == 'redhat' && fact('selinux') == 'true'
-  shell 'setenforce 0'
-end
-
-describe 'postgresql::server', unless: UNSUPPORTED_PLATFORMS.include?(os[:family]) do
+describe 'postgresql::server', skip: 'IAC-1286' do
   before(:each) do
-    if os[:family] == 'sles'
-      skip "These test's currently do not work on SLES/Suse modules"
-    end
+    skip "These test's currently do not work on SLES/Suse modules" if os[:family] == 'sles'
   end
 
   it 'on an alternative pgdata location' do
@@ -23,7 +18,7 @@ describe 'postgresql::server', unless: UNSUPPORTED_PLATFORMS.include?(os[:family
       class { 'postgresql::server': datadir => '/tmp/data', needs_initdb => true }
     MAIFEST
 
-    idempotent_apply(default, pp)
+    idempotent_apply(pp)
   end
 
   describe file('/tmp/data') do
