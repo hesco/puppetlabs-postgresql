@@ -35,21 +35,13 @@ class postgresql::params inherits postgresql::globals {
   $backup_provider = 'pg_dump'
 
   # following required by postgresql::server::ssl_certificate
-  $cerificate_days          = postgresql::globals::certificate_days
-  $cerificate_country       = '' 
-  $certificate_state        = '' 
-  $certificate_locality     = '' 
-  $certificate_organization = '' 
-  $certificate_common_name  = '' 
-  $certificate_email        = '' 
-
-  Integer $certificate_days          = lookup( 'postgresql::certificate_days', String, first, 365 )
-  String $certificate_country        = lookup( 'postgresql::cerificate_country', String, first, 'US' )
-  String $certificate_state          = lookup( 'postgresql::certificate_state', String, first, 'NE' )
-  String $certificate_locality       = lookup( 'postgresql::certificate_locality', String, first, 'Omaha' )
-  String $certificate_organization   = lookup( 'postgresql::certificate_organization', String, first, 'Acme, Inc.' )
-  String $certificate_common_name    = lookup( 'postgresql::certificate_common_name', String, first, 'example.com' )
-  String $certificate_email          = lookup( 'postgresql::certificate_email', String, first, 'admin@example.com' )
+  $certificate_days          = lookup( 'postgresql::certificate_days', Integer, first, 365 )
+  $certificate_country        = lookup( 'postgresql::certificate_country', String, first, 'US' )
+  $certificate_state          = lookup( 'postgresql::certificate_state', String, first, 'NE' )
+  $certificate_locality       = lookup( 'postgresql::certificate_locality', String, first, 'Omaha' )
+  $certificate_organization   = lookup( 'postgresql::certificate_organization', String, first, 'Acme, Inc.' )
+  $certificate_common_name    = lookup( 'postgresql::certificate_common_name', String, first, 'example.com' )
+  $certificate_email          = lookup( 'postgresql::certificate_email', String, first, 'admin@example.com' )
 
   # Amazon Linux's OS Family is 'Linux', operating system 'Amazon'.
   case $facts['os']['family'] {
