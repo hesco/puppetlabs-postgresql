@@ -1,0 +1,11 @@
+#!/bin/sh
+exec 1>&2
+
+# Create the socket directory (required for Unix socket connections)
+install -d -m 2775 -o postgres -g postgres /var/run/postgresql
+
+# postgres runs in the foreground by default — no -D daemonization
+exec setpriv --reuid=postgres --regid=postgres --init-groups \
+  /usr/lib/postgresql/16/bin/postgres \
+  -D /var/lib/postgresql/16/main \
+  -c config_file=/etc/postgresql/16/main/postgresql.conf   

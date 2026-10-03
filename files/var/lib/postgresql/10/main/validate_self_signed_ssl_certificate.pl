@@ -44,7 +44,7 @@ sub HELP_MESSAGE {
   # VERSION_MESSAGE();
   print <<"END_OF_USAGE";
 
-Usage: $0 -p /var/lib/postgresql/9.3/main -s '/C=US/ST=GA/L=Atlanta/O=YMDPartnersLLC/CN=pg.example.com/emailAddress=dba\@example.com' -d 3650
+Usage: $0 -p /var/lib/postgresql/10/main -s '/C=US/ST=GA/L=Atlanta/O=YMDPartnersLLC/CN=pg.example.com/emailAddress=dba\@example.com' -d 3650
 	-h 		Display this usage message and exit
 	-p 		provide a Path to the postgresql \$PG_DATA directory
 	-s 		provide the -subj line used to create the certificate being tested

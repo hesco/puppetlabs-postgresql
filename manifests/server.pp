@@ -172,7 +172,7 @@ class postgresql::server (
   Optional[String[1]]                                $timezone                     = $postgresql::params::timezone,
 
   Integer                                            $certificate_days           = $postgresql::params::certificate_days,
-  String                                             $certificate_country        = $postgresql::params::cerificate_country,
+  String                                             $certificate_country        = $postgresql::params::certificate_country,
   String                                             $certificate_state          = $postgresql::params::certificate_state,
   String                                             $certificate_locality       = $postgresql::params::certificate_locality,
   String                                             $certificate_organization   = $postgresql::params::certificate_organization,

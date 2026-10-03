@@ -14,6 +14,7 @@ class postgresql::server::ssl_certificate (
   $certificate_organization = $postgresql::server::certificate_organization,
   $certificate_common_name  = $postgresql::server::certificate_common_name,
   $certificate_email        = $postgresql::server::certificate_email,
+  $pg_version               = $postgresql::globals::globals_version
 
 ){
 
@@ -29,26 +30,30 @@ class postgresql::server::ssl_certificate (
   if ($certificate_common_name == undef) { fail("${err_prefix}common_name") }
   if ($certificate_email == undef) { fail("${err_prefix}email") }
 
-  notify { 'debug_postgresql::server::ssl_certificate':
-    message => "The postgresql data path is at: ${datadir}",
-  }
-
-  file { "${datadir}/validate_self_signed_ssl_certificate.pl":
-    source => 'puppet:///modules/postgresql/validate_self_signed_ssl_certificate.pl',
-      mode => '0775',
-     owner => 'postgres',
-     group => 'postgres',
-  }
-
-  file { "${datadir}/generate_self_signed_pg_server_certificate.sh":
-    source => 'puppet:///modules/postgresql/generate_self_signed_pg_server_certificate.sh',
-      mode => '0775',
-     owner => 'postgres',
-     group => 'postgres',
-  }
-
-  exec { 'generate_self_signed_pg_server_certificate':
-    command => "${datadir}/generate_self_signed_pg_server_certificate.sh ${datadir} ${postgresql::server::user} ${postgresql::server::group} '${certificate_subject}' ${certificate_days} ${force}",
+  if find_file('/usr/bin/psql') {
+    notify { 'debug_postgresql::server::ssl_certificate':
+      message => "The postgresql data path is at: ${datadir}",
+    }
+  
+    file { "${datadir}/validate_self_signed_ssl_certificate.pl":
+       source => "puppet:///modules/postgresql/files/var/lib/postgresql/${pg_version}/main/validate_self_signed_ssl_certificate.pl",
+         mode => '0775',
+        owner => 'postgres',
+        group => 'postgres',
+       onlyif => '/usr/bin/which psql',
+    }
+  
+    file { "${datadir}/generate_self_signed_pg_server_certificate.sh":
+       source => "puppet:///modules/postgresql/files/var/lib/postgresql/${pg_version}/main/generate_self_signed_pg_server_certificate.sh",
+         mode => '0775',
+        owner => 'postgres',
+        group => 'postgres',
+       onlyif => '/usr/bin/which psql',
+    }
+  
+    exec { 'generate_self_signed_pg_server_certificate':
+      command => "${datadir}/generate_self_signed_pg_server_certificate.sh ${datadir} ${postgresql::server::user} ${postgresql::server::group} '${certificate_subject}' ${certificate_days} ${force}",
+    }
   }
 
 }
